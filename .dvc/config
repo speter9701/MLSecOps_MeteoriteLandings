@@ -1,2 +1,6 @@
 [core]
     autostage = true
+    remote = origin
+['remote "origin"']
+    url = https://dagshub.com/speter9701/MLSecOps_MeteoriteLandings.dvc
+    auth = basic
