@@ -3,7 +3,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from meteorite.data import load_raw, sample_dataset
+from meteorite.data import load_raw, main, sample_dataset
 
 
 def test_load_raw_reads_csv(tmp_path: Path) -> None:
@@ -37,3 +37,10 @@ def test_sample_returns_all_rows_when_small() -> None:
 def test_sample_rejects_non_positive_size() -> None:
     with pytest.raises(ValueError):
         sample_dataset(pd.DataFrame({"a": [1]}), 0, 1)
+
+
+def test_cli_writes_sample(tmp_path: Path) -> None:
+    source, target = tmp_path / "raw.csv", tmp_path / "out" / "sample.csv"
+    pd.DataFrame({"a": range(50)}).to_csv(source, index=False)
+    assert main(["--input", str(source), "--output", str(target), "--n-rows", "5", "--seed", "3"]) == 0
+    assert len(pd.read_csv(target)) == 5
