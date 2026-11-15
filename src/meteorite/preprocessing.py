@@ -31,4 +31,8 @@ def clean_data(df: pd.DataFrame) -> pd.DataFrame:
     out["year"] = parse_year(pd.Series(out["year"], dtype=object))
     year = numeric_column(out, "year")
     out.loc[~year.between(MIN_YEAR, MAX_YEAR), "year"] = np.nan
+    lat, lon = numeric_column(out, "reclat"), numeric_column(out, "reclong")
+    out.loc[~lat.between(-90, 90), "reclat"] = np.nan
+    out.loc[~lon.between(-180, 180), "reclong"] = np.nan
+    out.loc[(lat == 0) & (lon == 0), ["reclat", "reclong"]] = np.nan
     return out.reset_index(drop=True)
