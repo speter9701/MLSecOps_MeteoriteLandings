@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from meteorite.preprocessing import add_geo_features, clean_data, parse_year
+from meteorite.preprocessing import add_geo_features, build_preprocessor, clean_data, parse_year
 
 
 def make_frame(**overrides: list[object]) -> pd.DataFrame:
@@ -80,3 +80,18 @@ def test_geo_features() -> None:
     assert features["is_antarctica"].tolist() == [1.0, 0.0, 0.0]
     assert features["abs_lat"].iloc[:2].tolist() == [75.0, 10.0]
     assert "is_antarctica" not in frame.columns
+
+
+def test_preprocessor_output_has_no_missing_values(raw_frame: pd.DataFrame) -> None:
+    cleaned = clean_data(raw_frame)
+    cleaned.loc[0, ["year", "reclat", "reclong"]] = np.nan
+    transformed = np.asarray(build_preprocessor().fit_transform(cleaned), dtype=float)
+    assert transformed.shape[0] == len(cleaned)
+    assert not np.isnan(transformed).any()
+
+
+def test_preprocessor_handles_unknown_category(raw_frame: pd.DataFrame) -> None:
+    cleaned = clean_data(raw_frame)
+    preprocessor = build_preprocessor().fit(cleaned)
+    unseen = cleaned.head(1).assign(recclass="never-seen")
+    assert np.asarray(preprocessor.transform(unseen)).shape[0] == 1
