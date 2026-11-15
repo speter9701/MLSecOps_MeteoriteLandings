@@ -66,3 +66,9 @@ def test_rows_without_positive_mass_are_dropped() -> None:
 
 def test_duplicates_are_dropped() -> None:
     assert len(clean_data(pd.concat([make_frame(), make_frame()], ignore_index=True))) == 2
+
+
+def test_clean_data_on_synthetic_frame(raw_frame: pd.DataFrame) -> None:
+    cleaned = clean_data(raw_frame)
+    assert len(cleaned) == len(raw_frame)
+    assert (cleaned["mass"] > 0).all()
