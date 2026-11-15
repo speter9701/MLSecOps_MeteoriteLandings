@@ -48,3 +48,21 @@ The REST API (`src/meteorite/api/`) and the monitoring layer only use these publ
 | `meteorite.inference` | `load_champion(tracking_uri=None)`, `predict(model, records) -> list[float]` | `/predict` endpoint |
 
 Environment variables: `DATA_PATH`, `MLFLOW_TRACKING_URI`, `MLFLOW_EXPERIMENT_NAME`, `MIN_IMPROVEMENT`.
+
+## Data versioning (DVC)
+
+- Raw data: `data/raw/Meteorite_Landings.csv` - the NASA Meteorite Landings export (45,716 rows,
+  the same file that is mirrored on Kaggle), tracked by DVC (`.dvc` pointer file in git, content in the remote).
+- Sample: `data/processed/meteorites_sample.csv` - 5,000 rows drawn by the DVC `sample` stage
+  (`dvc.yaml`), size and seed live in `params.yaml`.
+- Remote: DagsHub (`https://dagshub.com/speter9701/MLSecOps_MeteoriteLandings.dvc`).
+
+```powershell
+# one-time: credentials stay local (.dvc/config.local is git-ignored)
+dvc remote modify origin --local user <dagshub-username>
+dvc remote modify origin --local password <dagshub-token>
+
+dvc pull      # download the data
+dvc repro     # re-run the sample stage after changing params.yaml or src/meteorite/data.py
+dvc push      # upload new data versions
+```
