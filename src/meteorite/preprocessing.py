@@ -26,7 +26,7 @@ def parse_year(values: pd.Series) -> pd.Series:
 
 
 def clean_data(df: pd.DataFrame) -> pd.DataFrame:
-    """Apply the cleaning rules and return a new frame."""
+    """Apply the cleaning rules; returns a new frame with only valid targets."""
     out = df.rename(columns=COLUMN_ALIASES).drop(columns=list(DROP_COLUMNS), errors="ignore")
     out["year"] = parse_year(pd.Series(out["year"], dtype=object))
     year = numeric_column(out, "year")
@@ -35,4 +35,6 @@ def clean_data(df: pd.DataFrame) -> pd.DataFrame:
     out.loc[~lat.between(-90, 90), "reclat"] = np.nan
     out.loc[~lon.between(-180, 180), "reclong"] = np.nan
     out.loc[(lat == 0) & (lon == 0), ["reclat", "reclong"]] = np.nan
+    mass = numeric_column(out, TARGET_COLUMN)
+    out = out.loc[mass.notna() & (mass > 0)]
     return out.reset_index(drop=True)
