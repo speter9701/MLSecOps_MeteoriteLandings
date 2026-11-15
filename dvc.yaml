@@ -1,0 +1,15 @@
+stages:
+  sample:
+    cmd: >-
+      python -m meteorite.data
+      --input data/raw/Meteorite_Landings.csv
+      --output data/processed/meteorites_sample.csv
+      --n-rows ${sample.n_rows} --seed ${sample.seed}
+    deps:
+      - data/raw/Meteorite_Landings.csv
+      - src/meteorite/data.py
+    params:
+      - sample.n_rows
+      - sample.seed
+    outs:
+      - data/processed/meteorites_sample.csv
