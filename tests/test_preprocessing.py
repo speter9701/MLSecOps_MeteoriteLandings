@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from meteorite.preprocessing import clean_data, parse_year
+from meteorite.preprocessing import add_geo_features, clean_data, parse_year
 
 
 def make_frame(**overrides: list[object]) -> pd.DataFrame:
@@ -72,3 +72,11 @@ def test_clean_data_on_synthetic_frame(raw_frame: pd.DataFrame) -> None:
     cleaned = clean_data(raw_frame)
     assert len(cleaned) == len(raw_frame)
     assert (cleaned["mass"] > 0).all()
+
+
+def test_geo_features() -> None:
+    frame = pd.DataFrame({"reclat": [-75.0, 10.0, np.nan]})
+    features = add_geo_features(frame)
+    assert features["is_antarctica"].tolist() == [1.0, 0.0, 0.0]
+    assert features["abs_lat"].iloc[:2].tolist() == [75.0, 10.0]
+    assert "is_antarctica" not in frame.columns
