@@ -8,6 +8,7 @@ from meteorite.schemas import TARGET_COLUMN
 
 MIN_YEAR: Final[int] = 800
 MAX_YEAR: Final[int] = 2016
+ANTARCTICA_MAX_LAT: Final[float] = -60.0
 COLUMN_ALIASES: Final[dict[str, str]] = {"mass (g)": TARGET_COLUMN}
 DROP_COLUMNS: Final[tuple[str, ...]] = ("name", "id", "GeoLocation")
 
@@ -38,3 +39,12 @@ def clean_data(df: pd.DataFrame) -> pd.DataFrame:
     mass = numeric_column(out, TARGET_COLUMN)
     out = out.loc[mass.notna() & (mass > 0)]
     return out.drop_duplicates().reset_index(drop=True)
+
+
+def add_geo_features(df: pd.DataFrame) -> pd.DataFrame:
+    """Domain features: is the find in Antarctica, distance from the equator."""
+    out = df.copy()
+    lat = numeric_column(out, "reclat")
+    out["is_antarctica"] = (lat < ANTARCTICA_MAX_LAT).astype(float)
+    out["abs_lat"] = lat.abs()
+    return out
