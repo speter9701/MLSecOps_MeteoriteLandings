@@ -37,4 +37,4 @@ def clean_data(df: pd.DataFrame) -> pd.DataFrame:
     out.loc[(lat == 0) & (lon == 0), ["reclat", "reclong"]] = np.nan
     mass = numeric_column(out, TARGET_COLUMN)
     out = out.loc[mass.notna() & (mass > 0)]
-    return out.reset_index(drop=True)
+    return out.drop_duplicates().reset_index(drop=True)
