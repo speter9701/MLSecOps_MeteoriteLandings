@@ -3,12 +3,17 @@ from typing import Final
 
 import numpy as np
 import pandas as pd
+from sklearn.compose import ColumnTransformer
+from sklearn.impute import SimpleImputer
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import FunctionTransformer, OneHotEncoder, StandardScaler
 
-from meteorite.schemas import TARGET_COLUMN
+from meteorite.schemas import CATEGORICAL_FEATURES, NUMERIC_FEATURES, TARGET_COLUMN
 
 MIN_YEAR: Final[int] = 800
 MAX_YEAR: Final[int] = 2016
 ANTARCTICA_MAX_LAT: Final[float] = -60.0
+ENGINEERED_FEATURES: Final[tuple[str, ...]] = ("is_antarctica", "abs_lat")
 COLUMN_ALIASES: Final[dict[str, str]] = {"mass (g)": TARGET_COLUMN}
 DROP_COLUMNS: Final[tuple[str, ...]] = ("name", "id", "GeoLocation")
 
@@ -48,3 +53,18 @@ def add_geo_features(df: pd.DataFrame) -> pd.DataFrame:
     out["is_antarctica"] = (lat < ANTARCTICA_MAX_LAT).astype(float)
     out["abs_lat"] = lat.abs()
     return out
+
+
+def build_preprocessor(min_category_frequency: int = 10) -> Pipeline:
+    """Feature engineering, imputation, scaling and one-hot encoding."""
+    numeric = Pipeline([("impute", SimpleImputer(strategy="median")), ("scale", StandardScaler())])
+    categorical = Pipeline([
+        ("impute", SimpleImputer(strategy="most_frequent")),
+        ("onehot", OneHotEncoder(handle_unknown="infrequent_if_exist",
+                                 min_frequency=min_category_frequency, sparse_output=False)),
+    ])
+    columns = ColumnTransformer([
+        ("num", numeric, [*NUMERIC_FEATURES, *ENGINEERED_FEATURES]),
+        ("cat", categorical, list(CATEGORICAL_FEATURES)),
+    ])
+    return Pipeline([("geo", FunctionTransformer(add_geo_features)), ("columns", columns)])
