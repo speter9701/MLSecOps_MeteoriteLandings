@@ -1,5 +1,6 @@
 import math
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -41,3 +42,27 @@ def test_parse_year_formats(raw: object, expected: float) -> None:
 @pytest.mark.parametrize("raw", [None, "abc"])
 def test_parse_year_unparseable_is_nan(raw: object) -> None:
     assert math.isnan(parse_year(pd.Series([raw], dtype=object)).iloc[0])
+
+
+def test_out_of_range_years_become_nan() -> None:
+    cleaned = clean_data(make_frame(year=[2101.0, 500.0]))
+    assert cleaned["year"].isna().all()
+
+
+def test_invalid_and_unknown_coordinates_become_nan() -> None:
+    cleaned = clean_data(make_frame(reclat=[0.0, 95.0], reclong=[0.0, 354.0]))
+    assert cleaned[["reclat", "reclong"]].isna().all().all()
+
+
+def test_zero_latitude_alone_is_kept() -> None:
+    cleaned = clean_data(make_frame(reclat=[0.0, 1.0], reclong=[5.0, 1.0]))
+    assert cleaned["reclat"].tolist() == [0.0, 1.0]
+
+
+def test_rows_without_positive_mass_are_dropped() -> None:
+    frame = pd.concat([make_frame(), make_frame(**{"mass (g)": [0.0, np.nan]})], ignore_index=True)
+    assert clean_data(frame)["mass"].tolist() == [10.0, 20.0]
+
+
+def test_duplicates_are_dropped() -> None:
+    assert len(clean_data(pd.concat([make_frame(), make_frame()], ignore_index=True))) == 2
