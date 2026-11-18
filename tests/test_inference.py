@@ -25,7 +25,7 @@ def test_load_champion_without_model_fails(settings: Settings) -> None:
 
 def test_predict_with_champion(settings: Settings) -> None:
     train_and_register(settings, {"ridge": {"alpha": 1.0}})
-    model = load_champion(settings.tracking_uri)
+    model = load_champion()  # tracking URI already set by the training run
     predictions = predict(model, RECORDS)
     assert len(predictions) == 2 and all(value >= 0 for value in predictions)
     assert predict(model, []) == []
