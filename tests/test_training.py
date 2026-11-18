@@ -1,10 +1,31 @@
+from typing import Any
+
+import mlflow
 import pandas as pd
 
 from meteorite import training
+from meteorite.config import Settings
 from meteorite.preprocessing import clean_data
+
+FAST: dict[str, dict[str, Any]] = {
+    "ridge": {"alpha": 1.0},
+    "random_forest": {"n_estimators": 10, "random_state": 0},
+}
 
 
 def test_split_features_casts_numeric(raw_frame: pd.DataFrame) -> None:
     x, y = training.split_features(clean_data(raw_frame))
     assert list(x.columns) == ["recclass", "nametype", "fall", "year", "reclat", "reclong"]
     assert x["year"].dtype == float and y.dtype == float and len(x) == len(y)
+
+
+def test_train_logs_parent_and_nested_runs(settings: Settings) -> None:
+    result = training.train(settings, FAST)
+    assert result.best_model in FAST
+    assert set(result.metrics) == {"rmse_log", "mae_log", "r2_log", "median_ae_g"}
+    runs = mlflow.search_runs(experiment_names=["test"], output_format="list")
+    assert len(runs) == 1 + len(FAST)
+    parent = mlflow.get_run(result.run_id)
+    assert parent.data.tags["best_model"] == result.best_model
+    assert parent.data.params["candidates"] == "ridge,random_forest"
+    assert "rmse_log" in parent.data.metrics
