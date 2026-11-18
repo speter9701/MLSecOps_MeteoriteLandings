@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "meteorite"
+version = "0.1.0"
+description = "Meteorite mass regression with an MLOps toolchain"
+readme = "README.md"
+requires-python = ">=3.13"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pyright]
+include = ["src"]
+pythonVersion = "3.13"
+typeCheckingMode = "strict"
+reportMissingTypeStubs = false
+reportUnknownMemberType = false
+reportUnknownArgumentType = false
+reportUnknownVariableType = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "--cov --cov-report=term-missing --cov-report=xml"
+
+[tool.coverage.run]
+# Test code counts too: a test helper that never runs is a defect.
+source = ["src", "tests"]
+branch = true
+
+[tool.coverage.report]
+fail_under = 95
+show_missing = true
