@@ -2,6 +2,7 @@ from typing import Any
 
 import mlflow
 import pandas as pd
+import pytest
 
 from meteorite import training
 from meteorite.config import Settings
@@ -36,3 +37,11 @@ def test_logged_model_can_be_loaded(settings: Settings, raw_frame: pd.DataFrame)
     model = mlflow.pyfunc.load_model(f"runs:/{result.run_id}/model")
     x, _ = training.split_features(clean_data(raw_frame))
     assert len(model.predict(x.head(5))) == 5
+
+
+def test_main_reads_env(settings: Settings, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("DATA_PATH", str(settings.data_path))
+    monkeypatch.setenv("MLFLOW_TRACKING_URI", settings.tracking_uri)
+    monkeypatch.setenv("MLFLOW_EXPERIMENT_NAME", "test")
+    monkeypatch.setattr(training, "DEFAULT_CANDIDATES", {"ridge": {"alpha": 1.0}})
+    assert training.main() == 0
