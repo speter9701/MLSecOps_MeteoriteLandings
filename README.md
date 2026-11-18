@@ -113,3 +113,27 @@ $env:MLFLOW_TRACKING_URI = "sqlite:///mlflow.db"
 mlflow run . -e train --env-manager local --experiment-name meteorite-mass   # or: python -m meteorite.training
 mlflow ui --backend-store-uri sqlite:///mlflow.db                             # http://127.0.0.1:5000
 ```
+
+## Automatic promotion (champion / challenger)
+
+Model quality is protected automatically by the MLflow Model Registry (`src/meteorite/registry.py`):
+
+```mermaid
+flowchart LR
+    A[train_and_register] --> B[register new version<br/>= challenger]
+    B --> C{champion exists?}
+    C -- no --> E[set alias @champion]
+    C -- yes --> D[score champion on the<br/>same holdout set]
+    D --> F{challenger rmse_log <=<br/>champion rmse_log x 1 - MIN_IMPROVEMENT?}
+    F -- yes --> E
+    F -- no --> G[keep old champion<br/>tag promoted=False]
+```
+
+- Every training registers a new version of `meteorite-mass-regressor`.
+- The challenger gets the `@champion` alias only if it is **not worse** than the current champion
+  on the same holdout data (`MIN_IMPROVEMENT` env var = required relative gain, default 0).
+- The REST API always serves `models:/meteorite-mass-regressor@champion` (`meteorite.inference.load_champion`),
+  so a worse model never reaches production; retraining (API `/train` or the Airflow DAG) can only keep
+  or improve the served model quality.
+- The champion's holdout metrics are logged next to the challenger's as `champion_*` metrics, with
+  `promoted` and `model_version` tags, so every decision is traceable in the MLflow UI.
