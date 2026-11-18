@@ -97,3 +97,13 @@ def train(settings: Settings | None = None, candidates: Candidates | None = None
         )
         mlflow.set_tag("best_model", best)
     return TrainResult(run.info.run_id, best, metrics)
+
+
+def main() -> int:
+    """CLI entry point used by the MLproject file and Airflow."""
+    print(train())
+    return 0
+
+
+if __name__ == "__main__":  # pragma: no cover - thin CLI wrapper, main() is tested directly
+    raise SystemExit(main())
