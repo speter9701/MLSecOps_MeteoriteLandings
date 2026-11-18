@@ -95,3 +95,21 @@ so training and the `/predict` endpoint always apply exactly the same transforma
 - Metrics (`src/meteorite/evaluation.py`): `rmse_log` (model selection and promotion metric), `mae_log`,
   `r2_log`, `median_ae_g`. Model quality itself is not a goal of the project; keeping it from degrading
   automatically is (see *Automatic promotion*).
+
+## Experiment tracking (MLflow)
+
+`meteorite.training.train()` (`src/meteorite/training.py`) creates one parent run per training:
+
+- **nested runs** `cv-<model>`: one per candidate, with its hyperparameters and the K-fold `cv_rmse_log`;
+- **parent run** `train`: dataset input (`mlflow.log_input`), split / CV parameters, holdout metrics,
+  `best_model` tag and the fitted pipeline as an MLflow model with signature and input example.
+
+The model is serialized with **skops** instead of pickle, so loading a model cannot execute arbitrary code.
+Only the types listed in `SKOPS_TRUSTED_TYPES` are allowed; a test checks that every candidate model
+serializes with allow-listed types only.
+
+```powershell
+$env:MLFLOW_TRACKING_URI = "sqlite:///mlflow.db"
+mlflow run . -e train --env-manager local --experiment-name meteorite-mass   # or: python -m meteorite.training
+mlflow ui --backend-store-uri sqlite:///mlflow.db                             # http://127.0.0.1:5000
+```
