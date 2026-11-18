@@ -1,7 +1,11 @@
 """Shared fixtures: synthetic data shaped like the NASA export (no real data needed in CI)."""
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 import pytest
+
+from meteorite.config import Settings
 
 
 @pytest.fixture
@@ -22,3 +26,17 @@ def raw_frame() -> pd.DataFrame:
         "reclong": rng.uniform(-180, 180, n),
         "GeoLocation": [f"({a:.2f}, 0.0)" for a in lat],
     })
+
+
+@pytest.fixture
+def settings(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, raw_frame: pd.DataFrame) -> Settings:
+    """Temp CSV + temp MLflow sqlite store, so tests never touch ./mlruns or the real data."""
+    monkeypatch.chdir(tmp_path)
+    data_path = tmp_path / "sample.csv"
+    raw_frame.to_csv(data_path, index=False)
+    return Settings(
+        data_path=data_path,
+        tracking_uri=f"sqlite:///{(tmp_path / 'mlflow.db').as_posix()}",
+        experiment_name="test",
+        cv_folds=2,
+    )
