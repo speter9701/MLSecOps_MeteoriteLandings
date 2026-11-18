@@ -35,3 +35,16 @@ pre-commit install --hook-type pre-commit --hook-type commit-msg --hook-type pre
   reviewed pull requests merged with a merge commit (history of feature branches is kept).
 - **Code layout:** all business logic lives in `src/meteorite/`; Streamlit and Airflow code is a thin layer.
 - **Dependencies:** exact `==` versions in `requirements.txt` (runtime) and `requirements-dev.txt` (tooling).
+
+## Interface contract (ML core -> REST API / monitoring)
+
+The REST API (`src/meteorite/api/`) and the monitoring layer only use these public objects:
+
+| Module | Object | Used by |
+|--------|--------|---------|
+| `meteorite.schemas` | `MeteoriteFeatures` (pydantic input model), `FEATURE_COLUMNS`, `TARGET_COLUMN` | API request validation, Evidently column mapping |
+| `meteorite.config` | `Settings.from_env()` | everything that needs paths / MLflow URI |
+| `meteorite.training` | `train_and_register(settings=None, candidates=None) -> TrainResult` | `/train` endpoint, Airflow DAG |
+| `meteorite.inference` | `load_champion(tracking_uri=None)`, `predict(model, records) -> list[float]` | `/predict` endpoint |
+
+Environment variables: `DATA_PATH`, `MLFLOW_TRACKING_URI`, `MLFLOW_EXPERIMENT_NAME`, `MIN_IMPROVEMENT`.
