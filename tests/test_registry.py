@@ -1,6 +1,11 @@
+import mlflow
+import pandas as pd
 import pytest
 
-from meteorite.registry import should_promote
+from meteorite.config import Settings
+from meteorite.preprocessing import clean_data
+from meteorite.registry import champion_metrics, should_promote
+from meteorite.training import split_features
 
 
 @pytest.mark.parametrize(
@@ -16,3 +21,9 @@ from meteorite.registry import should_promote
 )
 def test_should_promote(new: float, old: float | None, margin: float, expected: bool) -> None:
     assert should_promote(new, old, margin) is expected
+
+
+def test_no_champion_yields_no_metrics(settings: Settings, raw_frame: pd.DataFrame) -> None:
+    mlflow.set_tracking_uri(settings.tracking_uri)
+    x, y = split_features(clean_data(raw_frame))
+    assert champion_metrics(x, y) is None
