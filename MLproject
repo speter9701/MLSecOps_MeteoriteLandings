@@ -1,0 +1,16 @@
+name: meteorite-mass
+
+python_env: python_env.yaml
+
+entry_points:
+  sample:
+    parameters:
+      n_rows: {type: int, default: 5000}
+      seed: {type: int, default: 42}
+    command: >-
+      python -m meteorite.data
+      --input data/raw/Meteorite_Landings.csv
+      --output data/processed/meteorites_sample.csv
+      --n-rows {n_rows} --seed {seed}
+  train:
+    command: "python -m meteorite.training"
