@@ -84,3 +84,14 @@ Implemented in `src/meteorite/preprocessing.py` (`clean_data`, `add_geo_features
 
 The sklearn preprocessor (feature engineering, imputation, scaling, encoding) is part of the model pipeline,
 so training and the `/predict` endpoint always apply exactly the same transformation.
+
+## Model
+
+- Task: regression of `mass` (grams) from `recclass`, `nametype`, `fall`, `year`, `reclat`, `reclong`.
+- The target spans 0.01 g - 60 t, so every model is a `TransformedTargetRegressor`: it is trained on
+  `log1p(mass)` and predicts grams through `expm1`.
+- Candidates (`src/meteorite/model.py`): `Ridge`, `RandomForestRegressor`, `HistGradientBoostingRegressor`,
+  each behind the same preprocessing pipeline.
+- Metrics (`src/meteorite/evaluation.py`): `rmse_log` (model selection and promotion metric), `mae_log`,
+  `r2_log`, `median_ae_g`. Model quality itself is not a goal of the project; keeping it from degrading
+  automatically is (see *Automatic promotion*).
