@@ -28,7 +28,12 @@ DEFAULT_CANDIDATES: Final[dict[str, dict[str, Any]]] = {
 
 # MLflow stores sklearn models with skops (no arbitrary pickle code execution on load);
 # our own feature function has to be allow-listed explicitly.
-SKOPS_TRUSTED_TYPES: Final[list[str]] = ["meteorite.preprocessing.add_geo_features", "numpy.dtype"]
+SKOPS_TRUSTED_TYPES: Final[list[str]] = [
+    "meteorite.preprocessing.add_geo_features",
+    "numpy.dtype",
+    "sklearn.ensemble._hist_gradient_boosting.predictor.TreePredictor",
+    "sklearn.tree._tree.Tree",
+]
 
 
 @dataclass(frozen=True)
