@@ -4,6 +4,7 @@ from typing import Final
 import mlflow
 import pandas as pd
 from mlflow.exceptions import MlflowException
+from mlflow.tracking import MlflowClient
 
 from meteorite.evaluation import regression_metrics
 from meteorite.schemas import CHAMPION_ALIAS, MODEL_NAME
@@ -28,3 +29,8 @@ def champion_metrics(x_test: pd.DataFrame, y_test: pd.Series) -> dict[str, float
     except MlflowException:
         return None
     return regression_metrics(y_test, model.predict(x_test))
+
+
+def promote(version: str, client: MlflowClient | None = None) -> None:
+    """Point the champion alias at the given model version."""
+    (client or MlflowClient()).set_registered_model_alias(MODEL_NAME, CHAMPION_ALIAS, version)
