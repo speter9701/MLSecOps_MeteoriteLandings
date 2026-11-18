@@ -1,0 +1,23 @@
+schema: '2.0'
+stages:
+  sample:
+    cmd: python -m meteorite.data --input data/raw/Meteorite_Landings.csv
+      --output data/processed/meteorites_sample.csv --n-rows 5000 --seed 42
+    deps:
+    - path: data/raw/Meteorite_Landings.csv
+      hash: md5
+      md5: a9677ac630740876f7d302f67b3f7cbc
+      size: 3952161
+    - path: src/meteorite/data.py
+      hash: md5
+      md5: 431705d87a0f0d41917bcc9c4b7607d6
+      size: 1617
+    params:
+      params.yaml:
+        sample.n_rows: 5000
+        sample.seed: 42
+    outs:
+    - path: data/processed/meteorites_sample.csv
+      hash: md5
+      md5: 2abcc6f37c85b74562d82a8080c6d43f
+      size: 423104
