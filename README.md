@@ -137,3 +137,16 @@ flowchart LR
   or improve the served model quality.
 - The champion's holdout metrics are logged next to the challenger's as `champion_*` metrics, with
   `promoted` and `model_version` tags, so every decision is traceable in the MLflow UI.
+
+### Screenshots (ML core)
+
+Three real trainings on the 5,000-row sample: version 1 became champion, version 2 (equal score) was
+promoted, version 3 was trained with `MIN_IMPROVEMENT=0.5` and therefore **not** promoted.
+
+| View | Screenshot |
+|------|-----------|
+| Experiment: parent `train` runs (nested `cv-*` runs collapsed) | ![runs](docs/screenshots/mlflow_experiment_runs.png) |
+| Parent run: metrics incl. `champion_*`, params, dataset, tags `promoted=False`, registered `v3` | ![run](docs/screenshots/mlflow_run_detail.png) |
+| Candidate comparison (nested CV runs, `cv_rmse_log`) | ![compare](docs/screenshots/mlflow_cv_compare.png) |
+| Model registry: 3 versions, `@champion` on version 2 | ![registry](docs/screenshots/mlflow_model_registry.png) |
+| Logged model artifacts (`model.skops`, signature, input example) | ![artifacts](docs/screenshots/mlflow_model_artifacts.png) |
