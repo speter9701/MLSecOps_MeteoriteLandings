@@ -1,4 +1,4 @@
-"""End-to-end training: candidate selection with cross-validation and MLflow tracking."""
+"""End-to-end training: candidate selection, MLflow tracking, registry promotion."""
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, Final
@@ -16,7 +16,8 @@ from meteorite.data import load_raw
 from meteorite.evaluation import regression_metrics, rmse_log
 from meteorite.model import build_pipeline
 from meteorite.preprocessing import clean_data
-from meteorite.schemas import FEATURE_COLUMNS, NUMERIC_FEATURES, TARGET_COLUMN
+from meteorite.registry import champion_metrics, promote, should_promote
+from meteorite.schemas import FEATURE_COLUMNS, MODEL_NAME, NUMERIC_FEATURES, TARGET_COLUMN
 
 Candidates = Mapping[str, Mapping[str, Any]]
 
@@ -42,7 +43,10 @@ class TrainResult:
 
     run_id: str
     best_model: str
+    model_version: str
     metrics: dict[str, float]
+    champion_metrics: dict[str, float] | None
+    promoted: bool
 
 
 def split_features(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.Series]:
@@ -66,8 +70,8 @@ def select_best_candidate(x: pd.DataFrame, y: pd.Series, candidates: Candidates,
     return min(scores, key=scores.__getitem__)
 
 
-def train(settings: Settings | None = None, candidates: Candidates | None = None) -> TrainResult:
-    """Pick the best candidate, refit it, evaluate on the holdout set and log everything to MLflow."""
+def train_and_register(settings: Settings | None = None, candidates: Candidates | None = None) -> TrainResult:
+    """Train, log to MLflow, register a new version and promote it only if it is not worse than the champion."""
     settings = settings or Settings.from_env()
     candidates = candidates or DEFAULT_CANDIDATES
     mlflow.set_tracking_uri(settings.tracking_uri)
@@ -87,26 +91,38 @@ def train(settings: Settings | None = None, candidates: Candidates | None = None
             "test_size": settings.test_size,
             "cv_folds": settings.cv_folds,
             "candidates": ",".join(candidates),
+            "min_improvement": settings.min_improvement,
         })
         best = select_best_candidate(x_train, y_train, candidates, settings)
         model = build_pipeline(best, candidates[best]).fit(x_train, y_train)
         predictions = model.predict(x_test)
         metrics = regression_metrics(y_test, predictions)
         mlflow.log_metrics(metrics)
-        log_model(
+        info = log_model(
             model,
             name="model",
             signature=infer_signature(x_test, predictions),
             input_example=x_test.head(3),
             skops_trusted_types=SKOPS_TRUSTED_TYPES,
+            registered_model_name=MODEL_NAME,
         )
-        mlflow.set_tag("best_model", best)
-    return TrainResult(run.info.run_id, best, metrics)
+        version = str(info.registered_model_version)
+
+        previous = champion_metrics(x_test, y_test)
+        if previous is not None:
+            mlflow.log_metrics({f"champion_{key}": value for key, value in previous.items()})
+        promoted = should_promote(
+            metrics["rmse_log"], previous["rmse_log"] if previous else None, settings.min_improvement
+        )
+        if promoted:
+            promote(version)
+        mlflow.set_tags({"best_model": best, "model_version": version, "promoted": str(promoted)})
+    return TrainResult(run.info.run_id, best, version, metrics, previous, promoted)
 
 
 def main() -> int:
     """CLI entry point used by the MLproject file and Airflow."""
-    print(train())
+    print(train_and_register())
     return 0
 
 

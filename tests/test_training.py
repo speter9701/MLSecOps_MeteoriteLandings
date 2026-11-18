@@ -23,7 +23,7 @@ def test_split_features_casts_numeric(raw_frame: pd.DataFrame) -> None:
 
 
 def test_train_logs_parent_and_nested_runs(settings: Settings) -> None:
-    result = training.train(settings, FAST)
+    result = training.train_and_register(settings, FAST)
     assert result.best_model in FAST
     assert set(result.metrics) == {"rmse_log", "mae_log", "r2_log", "median_ae_g"}
     runs = mlflow.search_runs(experiment_names=["test"], output_format="list")
@@ -35,7 +35,7 @@ def test_train_logs_parent_and_nested_runs(settings: Settings) -> None:
 
 
 def test_logged_model_can_be_loaded(settings: Settings, raw_frame: pd.DataFrame) -> None:
-    result = training.train(settings, FAST)
+    result = training.train_and_register(settings, FAST)
     model = mlflow.pyfunc.load_model(f"runs:/{result.run_id}/model")
     x, _ = training.split_features(clean_data(raw_frame))
     assert len(model.predict(x.head(5))) == 5
