@@ -66,3 +66,21 @@ dvc pull      # download the data
 dvc repro     # re-run the sample stage after changing params.yaml or src/meteorite/data.py
 dvc push      # upload new data versions
 ```
+
+## Preprocessing
+
+Implemented in `src/meteorite/preprocessing.py` (`clean_data`, `add_geo_features`, `build_preprocessor`).
+
+| Problem in the raw data | Handling |
+|-------------------------|----------|
+| Target column called `mass (g)` | renamed to `mass` |
+| Missing (131) or zero mass (19) | row dropped - the target must be known and positive |
+| Year as number or date string, impossible values (e.g. 2101) | parsed to a number, outside 800-2016 set to missing, later median-imputed |
+| `(0, 0)` coordinates (6,214 rows) mean "unknown location" | set to missing, later median-imputed |
+| Longitude outside +-180 (e.g. 354) | set to missing |
+| `name`, `id`, `GeoLocation` | dropped (identifiers / redundant with `reclat`, `reclong`) |
+| 466 meteorite classes, many rare | one-hot encoding, classes seen fewer than 10 times grouped as "infrequent" |
+| Hypothesis: Antarctica matters | engineered features `is_antarctica` (latitude < -60) and `abs_lat` |
+
+The sklearn preprocessor (feature engineering, imputation, scaling, encoding) is part of the model pipeline,
+so training and the `/predict` endpoint always apply exactly the same transformation.
