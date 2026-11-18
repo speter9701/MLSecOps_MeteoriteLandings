@@ -3,9 +3,11 @@ from typing import Any
 import mlflow
 import pandas as pd
 import pytest
+import skops.io as sio
 
 from meteorite import training
 from meteorite.config import Settings
+from meteorite.model import build_pipeline
 from meteorite.preprocessing import clean_data
 
 FAST: dict[str, dict[str, Any]] = {
@@ -45,3 +47,11 @@ def test_main_reads_env(settings: Settings, monkeypatch: pytest.MonkeyPatch) -> 
     monkeypatch.setenv("MLFLOW_EXPERIMENT_NAME", "test")
     monkeypatch.setattr(training, "DEFAULT_CANDIDATES", {"ridge": {"alpha": 1.0}})
     assert training.main() == 0
+
+
+@pytest.mark.parametrize("name", sorted(training.DEFAULT_CANDIDATES))
+def test_every_candidate_only_needs_allow_listed_types(name: str, raw_frame: pd.DataFrame) -> None:
+    x, y = training.split_features(clean_data(raw_frame))
+    small = {"n_estimators": 3} if name == "random_forest" else {"max_iter": 3} if name == "hist_gb" else {}
+    model = build_pipeline(name, small).fit(x, y)
+    assert set(sio.get_untrusted_types(data=sio.dumps(model))) <= set(training.SKOPS_TRUSTED_TYPES)
