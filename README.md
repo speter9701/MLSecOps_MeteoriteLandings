@@ -98,7 +98,7 @@ so training and the `/predict` endpoint always apply exactly the same transforma
 
 ## Experiment tracking (MLflow)
 
-`meteorite.training.train()` (`src/meteorite/training.py`) creates one parent run per training:
+`meteorite.training.train_and_register()` (`src/meteorite/training.py`) creates one parent run per training:
 
 - **nested runs** `cv-<model>`: one per candidate, with its hyperparameters and the K-fold `cv_rmse_log`;
 - **parent run** `train`: dataset input (`mlflow.log_input`), split / CV parameters, holdout metrics,
