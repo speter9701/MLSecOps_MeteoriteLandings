@@ -29,3 +29,10 @@ def test_train_logs_parent_and_nested_runs(settings: Settings) -> None:
     assert parent.data.tags["best_model"] == result.best_model
     assert parent.data.params["candidates"] == "ridge,random_forest"
     assert "rmse_log" in parent.data.metrics
+
+
+def test_logged_model_can_be_loaded(settings: Settings, raw_frame: pd.DataFrame) -> None:
+    result = training.train(settings, FAST)
+    model = mlflow.pyfunc.load_model(f"runs:/{result.run_id}/model")
+    x, _ = training.split_features(clean_data(raw_frame))
+    assert len(model.predict(x.head(5))) == 5
