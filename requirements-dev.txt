@@ -1,6 +1,7 @@
 -r requirements.txt
 dvc[s3]==3.67.1
 flake8==7.5.0
+httpx2==2.16.2
 pre-commit==4.7.0
 pyright==1.1.414
 pytest==9.2.0

@@ -150,3 +150,18 @@ promoted, version 3 was trained with `MIN_IMPROVEMENT=0.5` and therefore **not**
 | Candidate comparison (nested CV runs, `cv_rmse_log`) | ![compare](docs/screenshots/mlflow_cv_compare.png) |
 | Model registry: 3 versions, `@champion` on version 2 | ![registry](docs/screenshots/mlflow_model_registry.png) |
 | Logged model artifacts (`model.skops`, signature, input example) | ![artifacts](docs/screenshots/mlflow_model_artifacts.png) |
+
+## REST API
+
+FastAPI application in `src/meteorite/api/` (thin layer: business logic stays in `src/meteorite/`).
+
+### Run locally
+
+```powershell
+$env:MLFLOW_TRACKING_URI = "sqlite:///mlflow.db"
+python -m uvicorn meteorite.api.app:app --reload     # http://127.0.0.1:8000/docs (Swagger UI)
+```
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/health` | liveness probe, returns `{"status": "ok"}` |
