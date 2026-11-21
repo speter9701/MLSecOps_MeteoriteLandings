@@ -2,6 +2,7 @@
 from collections.abc import Callable
 from threading import Lock
 
+from mlflow.exceptions import MlflowException
 from mlflow.pyfunc import PyFuncModel
 from mlflow.tracking import MlflowClient
 
@@ -10,6 +11,13 @@ from meteorite.schemas import CHAMPION_ALIAS, MODEL_NAME
 
 ModelLoader = Callable[[str | None], PyFuncModel]
 VersionLoader = Callable[[str | None], str]
+
+
+class NoChampionError(RuntimeError):
+    """The model registry has no version with the champion alias yet."""
+
+    def __init__(self) -> None:
+        super().__init__("No champion model yet, call /train first")
 
 
 def champion_version(tracking_uri: str | None = None) -> str:
@@ -36,11 +44,15 @@ class ModelStore:
         self._lock = Lock()
 
     def get(self) -> tuple[PyFuncModel, str]:
-        """The champion model together with its registry version."""
+        """The champion model together with its registry version; raises NoChampionError if there is none."""
         with self._lock:
             if self._model is None or self._version is None:
-                self._version = self._version_loader(self._tracking_uri)
-                self._model = self._loader(self._tracking_uri)
+                try:
+                    self._version = self._version_loader(self._tracking_uri)
+                    self._model = self._loader(self._tracking_uri)
+                except MlflowException as exc:
+                    self._model, self._version = None, None
+                    raise NoChampionError() from exc
             return self._model, self._version
 
     @property
