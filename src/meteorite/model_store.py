@@ -43,17 +43,29 @@ class ModelStore:
         # uvicorn runs sync endpoints in a thread pool: load the model only once
         self._lock = Lock()
 
+    def _load(self) -> tuple[PyFuncModel, str]:
+        try:
+            version = self._version_loader(self._tracking_uri)
+            model = self._loader(self._tracking_uri)
+        except MlflowException as exc:
+            raise NoChampionError() from exc
+        self._model, self._version = model, version
+        return model, version
+
     def get(self) -> tuple[PyFuncModel, str]:
         """The champion model together with its registry version; raises NoChampionError if there is none."""
         with self._lock:
             if self._model is None or self._version is None:
-                try:
-                    self._version = self._version_loader(self._tracking_uri)
-                    self._model = self._loader(self._tracking_uri)
-                except MlflowException as exc:
-                    self._model, self._version = None, None
-                    raise NoChampionError() from exc
+                return self._load()
             return self._model, self._version
+
+    def reload(self) -> str:
+        """Load the champion again (after a promotion) and return its version.
+
+        If loading fails, the previously loaded model keeps serving.
+        """
+        with self._lock:
+            return self._load()[1]
 
     @property
     def model(self) -> PyFuncModel:
