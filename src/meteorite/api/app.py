@@ -8,3 +8,9 @@ app = FastAPI(
     version=meteorite.__version__,
     description="Predicts the mass (grams) of a meteorite and retrains the model through MLflow.",
 )
+
+
+@app.get("/health")
+def health() -> dict[str, str]:
+    """Liveness probe for docker compose and monitoring."""
+    return {"status": "ok"}
