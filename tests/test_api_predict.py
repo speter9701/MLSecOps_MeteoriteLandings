@@ -7,7 +7,9 @@ from mlflow.exceptions import MlflowException
 
 from meteorite.api.app import app, get_model_store
 from meteorite.api.schemas import MAX_RECORDS
+from meteorite.config import Settings
 from meteorite.model_store import ModelStore
+from meteorite.training import train_and_register
 
 RECORD = {"recclass": "L6", "nametype": "Valid", "fall": "Found", "year": 1998, "reclat": -76.7, "reclong": 159.4}
 
@@ -94,6 +96,18 @@ def test_predict_without_champion_returns_503(fake_model: FakeModel) -> None:
     assert response.status_code == 503
     assert response.json() == {"detail": "No champion model yet, call /train first"}
     assert fake_model.frames == []
+
+
+def test_predict_end_to_end_with_a_trained_ridge_model(settings: Settings) -> None:
+    client = serve(ModelStore(settings.tracking_uri))
+    assert client.post("/predict", json={"records": [RECORD]}).status_code == 503
+
+    result = train_and_register(settings, {"ridge": {"alpha": 1.0}})
+    response = client.post("/predict", json={"records": [RECORD, {"recclass": "never-seen-class"}]})
+    assert response.status_code == 200
+    body = response.json()
+    assert body["model_version"] == result.model_version
+    assert len(body["predictions"]) == 2 and all(value >= 0 for value in body["predictions"])
 
 
 def test_default_store_is_created_once_per_process(monkeypatch: pytest.MonkeyPatch) -> None:
