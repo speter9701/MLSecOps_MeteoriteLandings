@@ -3,6 +3,7 @@ from collections.abc import Iterator
 import pandas as pd
 import pytest
 from fastapi.testclient import TestClient
+from mlflow.exceptions import MlflowException
 
 from meteorite.api.app import app, get_model_store
 from meteorite.api.schemas import MAX_RECORDS
@@ -82,6 +83,17 @@ def test_predict_rejects_invalid_input(client: TestClient, fake_model: FakeModel
 def test_predict_accepts_the_maximum_batch(client: TestClient) -> None:
     response = client.post("/predict", json={"records": [RECORD] * MAX_RECORDS})
     assert response.status_code == 200 and len(response.json()["predictions"]) == MAX_RECORDS
+
+
+def test_predict_without_champion_returns_503(fake_model: FakeModel) -> None:
+    def no_alias(_: str | None) -> str:
+        raise MlflowException("alias champion not found")
+
+    client = serve(ModelStore(loader=lambda _: fake_model, version_loader=no_alias))
+    response = client.post("/predict", json={"records": [RECORD]})
+    assert response.status_code == 503
+    assert response.json() == {"detail": "No champion model yet, call /train first"}
+    assert fake_model.frames == []
 
 
 def test_default_store_is_created_once_per_process(monkeypatch: pytest.MonkeyPatch) -> None:
