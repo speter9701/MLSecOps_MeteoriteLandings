@@ -165,3 +165,30 @@ python -m uvicorn meteorite.api.app:app --reload     # http://127.0.0.1:8000/doc
 | Method | Path | Description |
 |--------|------|-------------|
 | `GET` | `/health` | liveness probe, returns `{"status": "ok"}` |
+| `POST` | `/predict` | predicted mass (grams) for 1-1000 records with the `@champion` model |
+
+### `POST /predict`
+
+The API serves the model version that holds the `@champion` alias. `meteorite.model_store.ModelStore` loads it
+lazily on the first request and keeps it in memory; the response tells which registry version answered.
+Each record uses the `MeteoriteFeatures` schema of the ML core (only `recclass` is required).
+
+```powershell
+$body = @{ records = @(
+    @{ recclass = "L6"; nametype = "Valid"; fall = "Found"; year = 1998; reclat = -76.7; reclong = 159.4 },
+    @{ recclass = "H5" }
+) } | ConvertTo-Json -Depth 3
+Invoke-RestMethod http://127.0.0.1:8000/predict -Method Post -ContentType "application/json" -Body $body
+```
+
+Example response (the values depend on the current champion):
+
+```json
+{"model_version": "2", "predictions": [37.9, 214.6]}
+```
+
+| Status | When |
+|--------|------|
+| 200 | predictions returned, in the order of `records` |
+| 422 | invalid input: no / more than 1000 records, missing `recclass`, unknown field, value out of range |
+| 503 | no champion model in the registry yet (`"No champion model yet, call /train first"`) |
