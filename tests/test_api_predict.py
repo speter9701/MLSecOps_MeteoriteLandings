@@ -5,6 +5,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from meteorite.api.app import app, get_model_store
+from meteorite.api.schemas import MAX_RECORDS
 from meteorite.model_store import ModelStore
 
 RECORD = {"recclass": "L6", "nametype": "Valid", "fall": "Found", "year": 1998, "reclat": -76.7, "reclong": 159.4}
@@ -53,6 +54,34 @@ def test_predict_applies_schema_defaults(client: TestClient, fake_model: FakeMod
     client.post("/predict", json={"records": [{"recclass": "H5"}]})
     row = fake_model.frames[0].iloc[0]
     assert row["nametype"] == "Valid" and row["fall"] == "Found" and pd.isna(row["year"])
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        {},
+        {"records": []},
+        {"records": [RECORD] * (MAX_RECORDS + 1)},
+        {"records": [RECORD], "model": "other"},
+        {"records": [{"nametype": "Valid"}]},
+        {"records": [{"recclass": ""}]},
+        {"records": [{**RECORD, "reclat": 91}]},
+        {"records": [{**RECORD, "fall": "Unknown"}]},
+        {"records": [{**RECORD, "mass": 10.0}]},
+    ],
+    ids=["no-records", "empty", "too-many", "extra-top-level", "no-recclass", "blank-recclass",
+         "lat-out-of-range", "bad-fall", "unknown-field"],
+)
+def test_predict_rejects_invalid_input(client: TestClient, fake_model: FakeModel, body: dict[str, object]) -> None:
+    response = client.post("/predict", json=body)
+    assert response.status_code == 422
+    assert "detail" in response.json()
+    assert fake_model.frames == []
+
+
+def test_predict_accepts_the_maximum_batch(client: TestClient) -> None:
+    response = client.post("/predict", json={"records": [RECORD] * MAX_RECORDS})
+    assert response.status_code == 200 and len(response.json()["predictions"]) == MAX_RECORDS
 
 
 def test_default_store_is_created_once_per_process(monkeypatch: pytest.MonkeyPatch) -> None:
