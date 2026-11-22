@@ -36,7 +36,7 @@ def health() -> dict[str, str]:
 def predict_mass(request: PredictRequest, store: StoreDep) -> PredictResponse:
     """Predict the mass in grams of every record with the champion model."""
     try:
-        model = store.model
+        model, version = store.get()
     except NoChampionError as exc:
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
-    return PredictResponse(predictions=predict(model, request.records))
+    return PredictResponse(model_version=version, predictions=predict(model, request.records))

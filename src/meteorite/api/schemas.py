@@ -15,4 +15,5 @@ class PredictRequest(BaseModel):
 class PredictResponse(BaseModel):
     """Predicted masses in grams, in the order of the request records."""
 
+    model_version: str = Field(examples=["2"])
     predictions: list[float]
