@@ -62,6 +62,9 @@ def predict_mass(request: PredictRequest, store: StoreDep) -> PredictResponse:
 
 
 @app.post("/train")
-def train(settings: SettingsDep, trainer: TrainerDep) -> TrainResponse:
+def train(settings: SettingsDep, trainer: TrainerDep, store: StoreDep) -> TrainResponse:
     """Retrain and register a new model version; it becomes champion only if it is not worse (takes ~45 s)."""
-    return TrainResponse.model_validate(asdict(trainer(settings)))
+    result = trainer(settings)
+    if result.promoted:
+        store.reload()
+    return TrainResponse.model_validate(asdict(result))
