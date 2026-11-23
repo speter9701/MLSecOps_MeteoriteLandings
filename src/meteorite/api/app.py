@@ -1,13 +1,13 @@
 """FastAPI application exposing the meteorite mass model."""
 from collections.abc import Callable
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from functools import lru_cache
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, HTTPException, status
 
 import meteorite
-from meteorite.api.schemas import PredictRequest, PredictResponse, TrainResponse
+from meteorite.api.schemas import PredictRequest, PredictResponse, TrainRequest, TrainResponse
 from meteorite.config import Settings
 from meteorite.inference import predict
 from meteorite.model_store import ModelStore, NoChampionError
@@ -62,8 +62,12 @@ def predict_mass(request: PredictRequest, store: StoreDep) -> PredictResponse:
 
 
 @app.post("/train")
-def train(settings: SettingsDep, trainer: TrainerDep, store: StoreDep) -> TrainResponse:
+def train(
+    settings: SettingsDep, trainer: TrainerDep, store: StoreDep, request: TrainRequest | None = None
+) -> TrainResponse:
     """Retrain and register a new model version; it becomes champion only if it is not worse (takes ~45 s)."""
+    if request is not None and request.min_improvement is not None:
+        settings = replace(settings, min_improvement=request.min_improvement)
     result = trainer(settings)
     if result.promoted:
         store.reload()

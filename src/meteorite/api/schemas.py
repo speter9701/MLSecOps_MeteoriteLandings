@@ -24,6 +24,17 @@ class PredictResponse(BaseModel):
     predictions: list[float]
 
 
+class TrainRequest(BaseModel):
+    """Optional overrides for one training run."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    min_improvement: float | None = Field(
+        default=None, ge=0, lt=1, examples=[0.02],
+        description="Relative RMSE gain the challenger needs to become champion (default: MIN_IMPROVEMENT env).",
+    )
+
+
 class TrainResponse(BaseModel):
     """Outcome of one training run (mirrors ``meteorite.training.TrainResult``)."""
 
