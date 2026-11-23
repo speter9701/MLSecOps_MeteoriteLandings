@@ -66,6 +66,18 @@ def test_train_with_promotion_reloads_the_champion(store: ModelStore, registry: 
     assert registry.loads == 2 and store.model_version == "2"
 
 
+def test_train_without_promotion_keeps_the_served_model(store: ModelStore, registry: FakeRegistry) -> None:
+    response = serve(FakeTrainer(promoted=False), store).post("/train")
+    assert response.status_code == 200 and response.json()["promoted"] is False
+    assert registry.loads == 1 and store.model_version == "1"
+
+
+def test_train_without_promotion_does_not_load_a_model(registry: FakeRegistry) -> None:
+    lazy_store = ModelStore(loader=registry.load, version_loader=registry.version)
+    assert serve(FakeTrainer(promoted=False), lazy_store).post("/train").status_code == 200
+    assert registry.loads == 0
+
+
 def test_train_end_to_end_promotes_the_first_model(settings: Settings) -> None:
     client = serve(lambda s: train_and_register(s, {"ridge": {"alpha": 1.0}}), ModelStore(settings.tracking_uri),
                    settings)
