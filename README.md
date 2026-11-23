@@ -166,6 +166,7 @@ python -m uvicorn meteorite.api.app:app --reload     # http://127.0.0.1:8000/doc
 |--------|------|-------------|
 | `GET` | `/health` | liveness probe, returns `{"status": "ok"}` |
 | `POST` | `/predict` | predicted mass (grams) for 1-1000 records with the `@champion` model |
+| `POST` | `/train` | retrain + register a new version, promote it only if it is not worse than the champion |
 
 ### `POST /predict`
 
@@ -192,3 +193,39 @@ Example response (the values depend on the current champion):
 | 200 | predictions returned, in the order of `records` |
 | 422 | invalid input: no / more than 1000 records, missing `recclass`, unknown field, value out of range |
 | 503 | no champion model in the registry yet (`"No champion model yet, call /train first"`) |
+
+### `POST /train`
+
+Calls `meteorite.training.train_and_register()` with `Settings.from_env()` (`DATA_PATH`, `MLFLOW_TRACKING_URI`,
+`MLFLOW_EXPERIMENT_NAME`, `MIN_IMPROVEMENT`), so the API, the CLI and the Airflow DAG train exactly the same way.
+If the new version was promoted, the API reloads the `@champion` model, and the next `/predict` already uses it.
+
+- The body is optional: `{"min_improvement": 0.02}` overrides `MIN_IMPROVEMENT` for this run only
+  (`0 <= min_improvement < 1`, relative RMSE gain the challenger needs).
+- The call is **synchronous** and takes about 45 s on the 5,000-row sample: the client gets the final result
+  (no job id to poll). FastAPI runs it in its thread pool, so `/predict` keeps answering in the meantime with the
+  previous champion. Use a client timeout of at least 2 minutes.
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:8000/train -Method Post -TimeoutSec 300
+Invoke-RestMethod http://127.0.0.1:8000/train -Method Post -TimeoutSec 300 -ContentType "application/json" `
+    -Body '{"min_improvement": 0.5}'
+```
+
+Example response (`dataclasses.asdict` of `TrainResult`; values depend on the data and the current champion):
+
+```json
+{
+  "run_id": "5f0c3d...",
+  "best_model": "random_forest",
+  "model_version": "4",
+  "metrics": {"rmse_log": 1.71, "mae_log": 1.22, "r2_log": 0.43, "median_ae_g": 61.0},
+  "champion_metrics": {"rmse_log": 1.71, "mae_log": 1.22, "r2_log": 0.43, "median_ae_g": 61.0},
+  "promoted": true
+}
+```
+
+| Status | When |
+|--------|------|
+| 200 | training finished; `promoted` tells whether the new version became `@champion` |
+| 422 | invalid body: `min_improvement` outside `[0, 1)` or unknown field |
