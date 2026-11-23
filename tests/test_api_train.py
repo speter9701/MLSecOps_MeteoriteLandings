@@ -1,4 +1,5 @@
 from collections.abc import Iterator
+from dataclasses import replace
 
 import pytest
 from fastapi.testclient import TestClient
@@ -76,6 +77,30 @@ def test_train_without_promotion_does_not_load_a_model(registry: FakeRegistry) -
     lazy_store = ModelStore(loader=registry.load, version_loader=registry.version)
     assert serve(FakeTrainer(promoted=False), lazy_store).post("/train").status_code == 200
     assert registry.loads == 0
+
+
+def test_min_improvement_overrides_the_settings(store: ModelStore) -> None:
+    trainer = FakeTrainer(promoted=False)
+    assert serve(trainer, store).post("/train", json={"min_improvement": 0.05}).status_code == 200
+    assert trainer.calls == [replace(BASE, min_improvement=0.05)]
+
+
+@pytest.mark.parametrize("body", [{}, None], ids=["empty-body", "no-body"])
+def test_train_keeps_the_settings_without_override(store: ModelStore, body: dict[str, float] | None) -> None:
+    trainer = FakeTrainer(promoted=False)
+    assert serve(trainer, store).post("/train", json=body).status_code == 200
+    assert trainer.calls == [BASE]
+
+
+@pytest.mark.parametrize(
+    "body",
+    [{"min_improvement": -0.1}, {"min_improvement": 1.0}, {"min_improvement": "a lot"}, {"candidates": ["ridge"]}],
+    ids=["negative", "one", "not-a-number", "unknown-field"],
+)
+def test_train_rejects_invalid_overrides(store: ModelStore, body: dict[str, object]) -> None:
+    trainer = FakeTrainer(promoted=False)
+    assert serve(trainer, store).post("/train", json=body).status_code == 422
+    assert trainer.calls == []
 
 
 def test_train_end_to_end_promotes_the_first_model(settings: Settings) -> None:
