@@ -20,6 +20,7 @@ class PredictRequest(BaseModel):
 class PredictResponse(BaseModel):
     """Predicted masses in grams, in the order of the request records."""
 
+    request_id: str = Field(description="Identifies the request in logs/predictions.csv and in MLflow.")
     model_version: str = Field(examples=["2"])
     predictions: list[float]
 

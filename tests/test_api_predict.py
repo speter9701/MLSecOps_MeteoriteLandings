@@ -49,7 +49,9 @@ def client(fake_model: FakeModel) -> TestClient:
 def test_predict_returns_one_value_per_record(client: TestClient, fake_model: FakeModel) -> None:
     response = client.post("/predict", json={"records": [RECORD, {"recclass": "H5"}, {"recclass": "Iron"}]})
     assert response.status_code == 200
-    assert response.json() == {"model_version": "7", "predictions": [0.0, 0.0, 1.0]}
+    body = response.json()
+    assert body.pop("request_id")
+    assert body == {"model_version": "7", "predictions": [0.0, 0.0, 1.0]}
     assert list(fake_model.frames[0]["recclass"]) == ["L6", "H5", "Iron"]
 
 
