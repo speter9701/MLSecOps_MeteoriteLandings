@@ -12,6 +12,7 @@ from meteorite.config import Settings
 def isolated_logs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """Request logs of the API go to a temp folder, never to ./logs."""
     monkeypatch.setenv("PREDICTION_LOG_PATH", str(tmp_path / "logs" / "predictions.csv"))
+    monkeypatch.setenv("TRAINING_LOG_PATH", str(tmp_path / "logs" / "training.csv"))
     return tmp_path / "logs"
 
 
