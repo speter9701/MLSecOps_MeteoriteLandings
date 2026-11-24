@@ -16,6 +16,21 @@ def isolated_logs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     return tmp_path / "logs"
 
 
+class FakeTracker:
+    """Records the MLflow calls of the API instead of writing to a tracking server."""
+
+    def __init__(self) -> None:
+        self.tagged_runs: list[str] = []
+
+    def tag_training_run(self, run_id: str) -> None:
+        self.tagged_runs.append(run_id)
+
+
+@pytest.fixture
+def tracker() -> FakeTracker:
+    return FakeTracker()
+
+
 @pytest.fixture
 def raw_frame() -> pd.DataFrame:
     """120 synthetic raw rows with realistic columns and a skewed mass distribution."""

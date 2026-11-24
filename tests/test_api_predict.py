@@ -6,12 +6,13 @@ import pytest
 from fastapi.testclient import TestClient
 from mlflow.exceptions import MlflowException
 
-from meteorite.api.app import app, get_model_store, get_prediction_logger
+from meteorite.api.app import app, get_api_tracker, get_model_store, get_prediction_logger
 from meteorite.api.schemas import MAX_RECORDS
 from meteorite.config import Settings
 from meteorite.model_store import ModelStore
 from meteorite.prediction_log import PREDICTION_COLUMNS
 from meteorite.training import train_and_register
+from tests.conftest import FakeTracker
 
 RECORD = {"recclass": "L6", "nametype": "Valid", "fall": "Found", "year": 1998, "reclat": -76.7, "reclong": 159.4}
 
@@ -33,7 +34,8 @@ def serve(store: ModelStore) -> TestClient:
 
 
 @pytest.fixture(autouse=True)
-def reset_overrides() -> Iterator[None]:
+def reset_overrides(tracker: FakeTracker) -> Iterator[None]:
+    app.dependency_overrides[get_api_tracker] = lambda: tracker
     yield
     app.dependency_overrides.clear()
 

@@ -8,6 +8,7 @@ from fastapi import Depends, FastAPI, HTTPException, status
 
 import meteorite
 from meteorite.api.schemas import PredictRequest, PredictResponse, TrainRequest, TrainResponse
+from meteorite.api_tracking import ApiTracker
 from meteorite.config import Settings
 from meteorite.inference import predict
 from meteorite.model_store import ModelStore, NoChampionError
@@ -52,10 +53,16 @@ def get_training_logger() -> TrainingLogger:
     return TrainingLogger.from_env()
 
 
+def get_api_tracker() -> ApiTracker:
+    """MLflow tracker of the API calls, on the tracking server of ``MLFLOW_TRACKING_URI``."""
+    return ApiTracker(Settings.from_env().tracking_uri)
+
+
 SettingsDep = Annotated[Settings, Depends(get_settings)]
 TrainerDep = Annotated[Trainer, Depends(get_trainer)]
 PredictionLogDep = Annotated[PredictionLogger, Depends(get_prediction_logger)]
 TrainingLogDep = Annotated[TrainingLogger, Depends(get_training_logger)]
+TrackerDep = Annotated[ApiTracker, Depends(get_api_tracker)]
 
 
 @app.get("/health")
@@ -82,12 +89,14 @@ def train(
     trainer: TrainerDep,
     store: StoreDep,
     training_log: TrainingLogDep,
+    tracker: TrackerDep,
     request: TrainRequest | None = None,
 ) -> TrainResponse:
     """Retrain and register a new model version; it becomes champion only if it is not worse (takes ~45 s)."""
     if request is not None and request.min_improvement is not None:
         settings = replace(settings, min_improvement=request.min_improvement)
     result = trainer(settings)
+    tracker.tag_training_run(result.run_id)
     training_log.log(result)
     if result.promoted:
         store.reload()

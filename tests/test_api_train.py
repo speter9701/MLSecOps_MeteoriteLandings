@@ -6,10 +6,13 @@ import pandas as pd
 import pytest
 from fastapi.testclient import TestClient
 
-from meteorite.api.app import app, get_model_store, get_settings, get_trainer, get_training_logger
+from meteorite.api.app import (
+    app, get_api_tracker, get_model_store, get_settings, get_trainer, get_training_logger,
+)
 from meteorite.config import Settings
 from meteorite.model_store import ModelStore
 from meteorite.training import TrainResult, train_and_register
+from tests.conftest import FakeTracker
 from tests.test_model_store import FakeRegistry
 
 METRICS = {"rmse_log": 1.2, "mae_log": 0.9, "r2_log": 0.4, "median_ae_g": 50.0}
@@ -36,7 +39,8 @@ def serve(trainer: object, store: ModelStore, settings: Settings = BASE) -> Test
 
 
 @pytest.fixture(autouse=True)
-def reset_overrides() -> Iterator[None]:
+def reset_overrides(tracker: FakeTracker) -> Iterator[None]:
+    app.dependency_overrides[get_api_tracker] = lambda: tracker
     yield
     app.dependency_overrides.clear()
 
