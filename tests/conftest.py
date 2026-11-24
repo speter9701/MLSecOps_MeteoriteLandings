@@ -1,5 +1,6 @@
 """Shared fixtures: synthetic data shaped like the NASA export (no real data needed in CI)."""
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -14,6 +15,30 @@ def isolated_logs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.setenv("PREDICTION_LOG_PATH", str(tmp_path / "logs" / "predictions.csv"))
     monkeypatch.setenv("TRAINING_LOG_PATH", str(tmp_path / "logs" / "training.csv"))
     return tmp_path / "logs"
+
+
+class FakeTracker:
+    """Records the MLflow calls of the API instead of writing to a tracking server."""
+
+    def __init__(self) -> None:
+        self.tagged_runs: list[str] = []
+        self.predictions: list[dict[str, Any]] = []
+
+    def tag_training_run(self, run_id: str) -> None:
+        self.tagged_runs.append(run_id)
+
+    def log_prediction(
+        self, request_id: str, request: dict[str, Any], response: dict[str, Any], model_version: str
+    ) -> str:
+        self.predictions.append(
+            {"request_id": request_id, "request": request, "response": response, "model_version": model_version}
+        )
+        return f"run-{len(self.predictions)}"
+
+
+@pytest.fixture
+def tracker() -> FakeTracker:
+    return FakeTracker()
 
 
 @pytest.fixture

@@ -5,13 +5,16 @@ import pandas as pd
 import pytest
 from fastapi.testclient import TestClient
 from mlflow.exceptions import MlflowException
+from mlflow.tracking import MlflowClient
 
-from meteorite.api.app import app, get_model_store, get_prediction_logger
+from meteorite.api.app import app, get_api_tracker, get_model_store, get_prediction_logger
 from meteorite.api.schemas import MAX_RECORDS
+from meteorite.api_tracking import PREDICTION_EXPERIMENT, ApiTracker
 from meteorite.config import Settings
 from meteorite.model_store import ModelStore
 from meteorite.prediction_log import PREDICTION_COLUMNS
 from meteorite.training import train_and_register
+from tests.conftest import FakeTracker
 
 RECORD = {"recclass": "L6", "nametype": "Valid", "fall": "Found", "year": 1998, "reclat": -76.7, "reclong": 159.4}
 
@@ -33,7 +36,8 @@ def serve(store: ModelStore) -> TestClient:
 
 
 @pytest.fixture(autouse=True)
-def reset_overrides() -> Iterator[None]:
+def reset_overrides(tracker: FakeTracker) -> Iterator[None]:
+    app.dependency_overrides[get_api_tracker] = lambda: tracker
     yield
     app.dependency_overrides.clear()
 
@@ -133,7 +137,7 @@ def test_predict_logs_every_record(client: TestClient, isolated_logs: Path) -> N
     assert set(log["model_version"]) == {7}
 
 
-def test_rejected_requests_are_not_logged(fake_model: FakeModel, isolated_logs: Path) -> None:
+def test_rejected_requests_are_not_logged(fake_model: FakeModel, isolated_logs: Path, tracker: FakeTracker) -> None:
     def no_alias(_: str | None) -> str:
         raise MlflowException("alias champion not found")
 
@@ -141,7 +145,31 @@ def test_rejected_requests_are_not_logged(fake_model: FakeModel, isolated_logs: 
     assert client.post("/predict", json={"records": []}).status_code == 422
     assert client.post("/predict", json={"records": [RECORD]}).status_code == 503
     assert not (isolated_logs / "predictions.csv").exists()
+    assert tracker.predictions == []
 
 
 def test_prediction_logger_follows_the_environment(isolated_logs: Path) -> None:
     assert get_prediction_logger().path == isolated_logs / "predictions.csv"
+
+
+def test_predict_sends_request_and_response_to_mlflow(client: TestClient, tracker: FakeTracker) -> None:
+    body = client.post("/predict", json={"records": [{"recclass": "H5"}]}).json()
+    assert tracker.predictions == [{
+        "request_id": body["request_id"],
+        "request": {"records": [{"recclass": "H5", "nametype": "Valid", "fall": "Found", "year": None,
+                                 "reclat": None, "reclong": None}]},
+        "response": body,
+        "model_version": "7",
+    }]
+
+
+def test_predict_artifacts_end_to_end(settings: Settings) -> None:
+    train_and_register(settings, {"ridge": {"alpha": 1.0}})
+    app.dependency_overrides[get_api_tracker] = lambda: ApiTracker(settings.tracking_uri)
+    body = serve(ModelStore(settings.tracking_uri)).post("/predict", json={"records": [RECORD]}).json()
+    client = MlflowClient(settings.tracking_uri)
+    experiment = client.get_experiment_by_name(PREDICTION_EXPERIMENT)
+    assert experiment is not None
+    runs = client.search_runs([experiment.experiment_id], f"tags.request_id = '{body['request_id']}'")
+    assert len(runs) == 1 and runs[0].data.tags["model_version"] == body["model_version"]
+    assert runs[0].data.metrics["n_records"] == 1.0
