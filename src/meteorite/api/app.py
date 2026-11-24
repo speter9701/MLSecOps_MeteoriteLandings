@@ -11,6 +11,7 @@ from meteorite.api.schemas import PredictRequest, PredictResponse, TrainRequest,
 from meteorite.config import Settings
 from meteorite.inference import predict
 from meteorite.model_store import ModelStore, NoChampionError
+from meteorite.prediction_log import PredictionLogger, TrainingLogger
 from meteorite.training import TrainResult, train_and_register
 
 Trainer = Callable[[Settings], TrainResult]
@@ -41,8 +42,20 @@ def get_trainer() -> Trainer:
     return train_and_register
 
 
+def get_prediction_logger() -> PredictionLogger:
+    """Prediction log at ``PREDICTION_LOG_PATH``, read from the environment on every call."""
+    return PredictionLogger.from_env()
+
+
+def get_training_logger() -> TrainingLogger:
+    """Training log at ``TRAINING_LOG_PATH``, read from the environment on every call."""
+    return TrainingLogger.from_env()
+
+
 SettingsDep = Annotated[Settings, Depends(get_settings)]
 TrainerDep = Annotated[Trainer, Depends(get_trainer)]
+PredictionLogDep = Annotated[PredictionLogger, Depends(get_prediction_logger)]
+TrainingLogDep = Annotated[TrainingLogger, Depends(get_training_logger)]
 
 
 @app.get("/health")
@@ -52,23 +65,30 @@ def health() -> dict[str, str]:
 
 
 @app.post("/predict", responses={503: {"description": "No champion model yet, call /train first"}})
-def predict_mass(request: PredictRequest, store: StoreDep) -> PredictResponse:
-    """Predict the mass in grams of every record with the champion model."""
+def predict_mass(request: PredictRequest, store: StoreDep, prediction_log: PredictionLogDep) -> PredictResponse:
+    """Predict the mass in grams of every record with the champion model and log the request."""
     try:
         model, version = store.get()
     except NoChampionError as exc:
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
-    return PredictResponse(model_version=version, predictions=predict(model, request.records))
+    predictions = predict(model, request.records)
+    request_id = prediction_log.log(request.records, predictions, version)
+    return PredictResponse(request_id=request_id, model_version=version, predictions=predictions)
 
 
 @app.post("/train")
 def train(
-    settings: SettingsDep, trainer: TrainerDep, store: StoreDep, request: TrainRequest | None = None
+    settings: SettingsDep,
+    trainer: TrainerDep,
+    store: StoreDep,
+    training_log: TrainingLogDep,
+    request: TrainRequest | None = None,
 ) -> TrainResponse:
     """Retrain and register a new model version; it becomes champion only if it is not worse (takes ~45 s)."""
     if request is not None and request.min_improvement is not None:
         settings = replace(settings, min_improvement=request.min_improvement)
     result = trainer(settings)
+    training_log.log(result)
     if result.promoted:
         store.reload()
     return TrainResponse.model_validate(asdict(result))

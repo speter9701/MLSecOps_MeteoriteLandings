@@ -1,14 +1,16 @@
 from collections.abc import Iterator
+from pathlib import Path
 
 import pandas as pd
 import pytest
 from fastapi.testclient import TestClient
 from mlflow.exceptions import MlflowException
 
-from meteorite.api.app import app, get_model_store
+from meteorite.api.app import app, get_model_store, get_prediction_logger
 from meteorite.api.schemas import MAX_RECORDS
 from meteorite.config import Settings
 from meteorite.model_store import ModelStore
+from meteorite.prediction_log import PREDICTION_COLUMNS
 from meteorite.training import train_and_register
 
 RECORD = {"recclass": "L6", "nametype": "Valid", "fall": "Found", "year": 1998, "reclat": -76.7, "reclong": 159.4}
@@ -49,7 +51,9 @@ def client(fake_model: FakeModel) -> TestClient:
 def test_predict_returns_one_value_per_record(client: TestClient, fake_model: FakeModel) -> None:
     response = client.post("/predict", json={"records": [RECORD, {"recclass": "H5"}, {"recclass": "Iron"}]})
     assert response.status_code == 200
-    assert response.json() == {"model_version": "7", "predictions": [0.0, 0.0, 1.0]}
+    body = response.json()
+    assert body.pop("request_id")
+    assert body == {"model_version": "7", "predictions": [0.0, 0.0, 1.0]}
     assert list(fake_model.frames[0]["recclass"]) == ["L6", "H5", "Iron"]
 
 
@@ -116,3 +120,28 @@ def test_default_store_is_created_once_per_process(monkeypatch: pytest.MonkeyPat
     store = get_model_store()
     assert isinstance(store, ModelStore) and get_model_store() is store
     get_model_store.cache_clear()
+
+
+def test_predict_logs_every_record(client: TestClient, isolated_logs: Path) -> None:
+    first = client.post("/predict", json={"records": [RECORD, {"recclass": "H5"}]}).json()
+    second = client.post("/predict", json={"records": [{"recclass": "Iron"}]}).json()
+    log = pd.read_csv(isolated_logs / "predictions.csv")
+    assert list(log.columns) == list(PREDICTION_COLUMNS)
+    assert list(log["request_id"]) == [first["request_id"]] * 2 + [second["request_id"]]
+    assert list(log["recclass"]) == ["L6", "H5", "Iron"]
+    assert list(log["prediction"]) == first["predictions"] + second["predictions"]
+    assert set(log["model_version"]) == {7}
+
+
+def test_rejected_requests_are_not_logged(fake_model: FakeModel, isolated_logs: Path) -> None:
+    def no_alias(_: str | None) -> str:
+        raise MlflowException("alias champion not found")
+
+    client = serve(ModelStore(loader=lambda _: fake_model, version_loader=no_alias))
+    assert client.post("/predict", json={"records": []}).status_code == 422
+    assert client.post("/predict", json={"records": [RECORD]}).status_code == 503
+    assert not (isolated_logs / "predictions.csv").exists()
+
+
+def test_prediction_logger_follows_the_environment(isolated_logs: Path) -> None:
+    assert get_prediction_logger().path == isolated_logs / "predictions.csv"
