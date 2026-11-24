@@ -1,5 +1,6 @@
 """Shared fixtures: synthetic data shaped like the NASA export (no real data needed in CI)."""
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -21,9 +22,18 @@ class FakeTracker:
 
     def __init__(self) -> None:
         self.tagged_runs: list[str] = []
+        self.predictions: list[dict[str, Any]] = []
 
     def tag_training_run(self, run_id: str) -> None:
         self.tagged_runs.append(run_id)
+
+    def log_prediction(
+        self, request_id: str, request: dict[str, Any], response: dict[str, Any], model_version: str
+    ) -> str:
+        self.predictions.append(
+            {"request_id": request_id, "request": request, "response": response, "model_version": model_version}
+        )
+        return f"run-{len(self.predictions)}"
 
 
 @pytest.fixture

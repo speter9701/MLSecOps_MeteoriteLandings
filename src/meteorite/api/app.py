@@ -4,7 +4,7 @@ from dataclasses import asdict, replace
 from functools import lru_cache
 from typing import Annotated
 
-from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, status
 
 import meteorite
 from meteorite.api.schemas import PredictRequest, PredictResponse, TrainRequest, TrainResponse
@@ -72,7 +72,13 @@ def health() -> dict[str, str]:
 
 
 @app.post("/predict", responses={503: {"description": "No champion model yet, call /train first"}})
-def predict_mass(request: PredictRequest, store: StoreDep, prediction_log: PredictionLogDep) -> PredictResponse:
+def predict_mass(
+    request: PredictRequest,
+    store: StoreDep,
+    prediction_log: PredictionLogDep,
+    tracker: TrackerDep,
+    background_tasks: BackgroundTasks,
+) -> PredictResponse:
     """Predict the mass in grams of every record with the champion model and log the request."""
     try:
         model, version = store.get()
@@ -80,7 +86,12 @@ def predict_mass(request: PredictRequest, store: StoreDep, prediction_log: Predi
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
     predictions = predict(model, request.records)
     request_id = prediction_log.log(request.records, predictions, version)
-    return PredictResponse(request_id=request_id, model_version=version, predictions=predictions)
+    response = PredictResponse(request_id=request_id, model_version=version, predictions=predictions)
+    # MLflow round trips run after the response is sent, they do not add to the latency
+    background_tasks.add_task(
+        tracker.log_prediction, request_id, request.model_dump(mode="json"), response.model_dump(mode="json"), version
+    )
+    return response
 
 
 @app.post("/train")
