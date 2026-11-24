@@ -1,5 +1,6 @@
 """CSV log of the API predictions: the current data of the Evidently drift report."""
 import csv
+import os
 from collections.abc import Sequence
 from datetime import UTC, datetime
 from pathlib import Path
@@ -23,6 +24,11 @@ class PredictionLogger:
 
     def __init__(self, path: Path = DEFAULT_PREDICTION_LOG) -> None:
         self.path = path
+
+    @classmethod
+    def from_env(cls) -> "PredictionLogger":
+        """Logger writing to ``PREDICTION_LOG_PATH`` (default ``logs/predictions.csv``)."""
+        return cls(Path(os.getenv("PREDICTION_LOG_PATH", str(DEFAULT_PREDICTION_LOG))))
 
     def log(self, records: Sequence[MeteoriteFeatures], predictions: Sequence[float], model_version: str) -> str:
         """Log a predict request and return its request id."""
