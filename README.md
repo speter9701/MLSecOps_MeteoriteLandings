@@ -185,7 +185,7 @@ Invoke-RestMethod http://127.0.0.1:8000/predict -Method Post -ContentType "appli
 Example response (the values depend on the current champion):
 
 ```json
-{"model_version": "2", "predictions": [37.9, 214.6]}
+{"request_id": "0b6f3c1e-8a52-4a1e-9d55-5f1f2e0c7a10", "model_version": "2", "predictions": [37.9, 214.6]}
 ```
 
 | Status | When |
@@ -229,3 +229,26 @@ Example response (`dataclasses.asdict` of `TrainResult`; values depend on the da
 |--------|------|
 | 200 | training finished; `promoted` tells whether the new version became `@champion` |
 | 422 | invalid body: `min_improvement` outside `[0, 1)` or unknown field |
+
+### Request logs (input of the Evidently drift report)
+
+`src/meteorite/prediction_log.py` appends every successful API call to a CSV file (`logs/` is git-ignored).
+The header is written once when the file is created, missing folders are created, and a process-wide lock keeps
+the lines of concurrent requests together. Rejected requests (422, 503) are not logged.
+
+| File (env var, default) | One row per | Columns |
+|-------------------------|-------------|---------|
+| `PREDICTION_LOG_PATH`, `logs/predictions.csv` | predicted record | `timestamp`, `request_id`, `recclass`, `nametype`, `fall`, `year`, `reclat`, `reclong`, `prediction`, `model_version` |
+| `TRAINING_LOG_PATH`, `logs/training.csv` | `/train` call | `timestamp`, `run_id`, `model_version`, `promoted` |
+
+- `timestamp`: UTC, ISO 8601 (`2026-11-24T08:39:48.530492+00:00`).
+- `request_id`: uuid4 per `/predict` call, shared by all records of the request and returned in the response.
+- Missing optional features (`year`, `reclat`, `reclong`) are empty cells, i.e. `NaN` in `pandas.read_csv`.
+- The feature columns have the same names as `FEATURE_COLUMNS` in the training data, so the monitoring code can
+  compare `logs/predictions.csv` (current) with `data/processed/meteorites_sample.csv` (reference) directly.
+
+```csv
+timestamp,request_id,recclass,nametype,fall,year,reclat,reclong,prediction,model_version
+2026-11-24T08:39:48.530492+00:00,5b66ef31-222b-4111-ab89-85654b38141f,L6,Valid,Found,1998.0,-76.7,159.4,37.9,2
+2026-11-24T08:39:48.530492+00:00,5b66ef31-222b-4111-ab89-85654b38141f,H5,Valid,Found,,,,214.6,2
+```
