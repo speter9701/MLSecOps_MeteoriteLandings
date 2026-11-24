@@ -40,5 +40,6 @@ class ApiTracker:
         run_id = run.info.run_id
         self._client.log_dict(run_id, dict(request), "request.json")
         self._client.log_dict(run_id, dict(response), "response.json")
+        self._client.log_metric(run_id, "n_records", len(response.get("predictions", [])))
         self._client.set_terminated(run_id)
         return run_id
