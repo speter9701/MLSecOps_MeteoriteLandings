@@ -1,10 +1,12 @@
 from collections.abc import Iterator
 from dataclasses import replace
+from pathlib import Path
 
+import pandas as pd
 import pytest
 from fastapi.testclient import TestClient
 
-from meteorite.api.app import app, get_model_store, get_settings, get_trainer
+from meteorite.api.app import app, get_model_store, get_settings, get_trainer, get_training_logger
 from meteorite.config import Settings
 from meteorite.model_store import ModelStore
 from meteorite.training import TrainResult, train_and_register
@@ -116,3 +118,13 @@ def test_default_dependencies(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("MIN_IMPROVEMENT", "0.1")
     assert get_settings().min_improvement == 0.1
     assert get_trainer() is train_and_register
+
+
+def test_train_calls_are_logged(store: ModelStore, isolated_logs: Path) -> None:
+    client = serve(FakeTrainer(promoted=True), store)
+    client.post("/train")
+    client.post("/train", json={"min_improvement": 2})
+    log = pd.read_csv(isolated_logs / "training.csv", dtype=str)
+    assert list(log.columns) == ["timestamp", "run_id", "model_version", "promoted"]
+    assert log[["run_id", "model_version", "promoted"]].values.tolist() == [["run-1", "2", "True"]]
+    assert get_training_logger().path == isolated_logs / "training.csv"
