@@ -5,10 +5,12 @@ from pathlib import Path
 import pandas as pd
 import pytest
 from fastapi.testclient import TestClient
+from mlflow.tracking import MlflowClient
 
 from meteorite.api.app import (
     app, get_api_tracker, get_model_store, get_settings, get_trainer, get_training_logger,
 )
+from meteorite.api_tracking import ApiTracker
 from meteorite.config import Settings
 from meteorite.model_store import ModelStore
 from meteorite.training import TrainResult, train_and_register
@@ -112,10 +114,24 @@ def test_train_rejects_invalid_overrides(store: ModelStore, body: dict[str, obje
 def test_train_end_to_end_promotes_the_first_model(settings: Settings) -> None:
     client = serve(lambda s: train_and_register(s, {"ridge": {"alpha": 1.0}}), ModelStore(settings.tracking_uri),
                    settings)
+    app.dependency_overrides[get_api_tracker] = lambda: ApiTracker(settings.tracking_uri)
     body = client.post("/train").json()
     assert body["promoted"] is True and body["champion_metrics"] is None and body["best_model"] == "ridge"
+    assert MlflowClient(settings.tracking_uri).get_run(body["run_id"]).data.tags["source"] == "api"
     predicted = client.post("/predict", json={"records": [{"recclass": "L6"}]}).json()
     assert predicted["model_version"] == body["model_version"]
+
+
+def test_train_tags_the_run_as_api_triggered(store: ModelStore, tracker: FakeTracker) -> None:
+    client = serve(FakeTrainer(promoted=False), store)
+    client.post("/train")
+    client.post("/train", json={"min_improvement": -1})
+    assert tracker.tagged_runs == ["run-1"]
+
+
+def test_default_tracker_uses_the_tracking_uri(monkeypatch: pytest.MonkeyPatch, settings: Settings) -> None:
+    monkeypatch.setenv("MLFLOW_TRACKING_URI", settings.tracking_uri)
+    assert isinstance(get_api_tracker(), ApiTracker)
 
 
 def test_default_dependencies(monkeypatch: pytest.MonkeyPatch) -> None:
