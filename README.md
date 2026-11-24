@@ -252,3 +252,21 @@ timestamp,request_id,recclass,nametype,fall,year,reclat,reclong,prediction,model
 2026-11-24T08:39:48.530492+00:00,5b66ef31-222b-4111-ab89-85654b38141f,L6,Valid,Found,1998.0,-76.7,159.4,37.9,2
 2026-11-24T08:39:48.530492+00:00,5b66ef31-222b-4111-ab89-85654b38141f,H5,Valid,Found,,,,214.6,2
 ```
+
+### MLflow artifacts of the endpoints
+
+Both endpoints leave a trace in MLflow (`src/meteorite/api_tracking.py`, `ApiTracker`):
+
+| Endpoint | Experiment | What is stored |
+|----------|------------|----------------|
+| `POST /train` | `meteorite-mass` (`MLFLOW_EXPERIMENT_NAME`) | the `train` run of `train_and_register()` (model, metrics, dataset, nested CV runs, registered version) + tag `source=api` |
+| `POST /predict` | `meteorite-predictions` | one run per request (`predict-<request_id[:8]>`): artifacts `request.json` and `response.json`, metric `n_records`, tags `request_id`, `model_version`, `source=api` |
+
+- The `request_id` connects the response, the rows of `logs/predictions.csv` and the MLflow run
+  (MLflow UI search: `tags.request_id = '<id>'`).
+- The predict run is written in a FastAPI background task, after the response has been sent, so MLflow round
+  trips do not add to the latency of `/predict`.
+- `ApiTracker` uses `MlflowClient` instead of the fluent `mlflow.*` API: the fluent API keeps one active
+  experiment per process, and a concurrent `/train` would switch it.
+- Trainings started outside the API (`python -m meteorite.training`, `mlflow run`) have no `source=api` tag,
+  so the MLflow UI filter `tags.source = 'api'` lists the API-triggered ones.
