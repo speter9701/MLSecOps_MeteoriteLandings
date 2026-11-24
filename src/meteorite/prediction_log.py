@@ -41,5 +41,8 @@ class PredictionLogger:
         ]
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with _WRITE_LOCK, self.path.open("a", newline="", encoding="utf-8") as handle:
-            csv.DictWriter(handle, fieldnames=PREDICTION_COLUMNS).writerows(rows)
+            writer = csv.DictWriter(handle, fieldnames=PREDICTION_COLUMNS)
+            if handle.tell() == 0:
+                writer.writeheader()
+            writer.writerows(rows)
         return request_id
