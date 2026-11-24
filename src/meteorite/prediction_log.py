@@ -1,7 +1,7 @@
 """CSV log of the API predictions: the current data of the Evidently drift report."""
 import csv
 import os
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 from threading import Lock
@@ -17,6 +17,16 @@ DEFAULT_PREDICTION_LOG: Final[Path] = Path("logs/predictions.csv")
 
 # one lock for every writer: concurrent requests must not interleave their lines
 _WRITE_LOCK = Lock()
+
+
+def append_csv(path: Path, columns: Sequence[str], rows: Sequence[Mapping[str, object]]) -> None:
+    """Append rows to a CSV file, creating the folder and writing the header for a new file."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with _WRITE_LOCK, path.open("a", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=columns)
+        if handle.tell() == 0:
+            writer.writeheader()
+        writer.writerows(rows)
 
 
 class PredictionLogger:
@@ -39,10 +49,5 @@ class PredictionLogger:
              "prediction": prediction, "model_version": model_version}
             for record, prediction in zip(records, predictions, strict=True)
         ]
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        with _WRITE_LOCK, self.path.open("a", newline="", encoding="utf-8") as handle:
-            writer = csv.DictWriter(handle, fieldnames=PREDICTION_COLUMNS)
-            if handle.tell() == 0:
-                writer.writeheader()
-            writer.writerows(rows)
+        append_csv(self.path, PREDICTION_COLUMNS, rows)
         return request_id
