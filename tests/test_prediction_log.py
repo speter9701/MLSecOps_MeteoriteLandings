@@ -76,3 +76,34 @@ def test_prediction_columns_match_the_agreed_format() -> None:
         "timestamp", "request_id", "recclass", "nametype", "fall", "year", "reclat", "reclong",
         "prediction", "model_version",
     )
+
+
+def test_header_is_written_only_once(tmp_path: Path) -> None:
+    path = tmp_path / "predictions.csv"
+    logger = PredictionLogger(path)
+    logger.log(RECORDS, [1.0, 2.0], "1")
+    logger.log(RECORDS[:1], [3.0], "2")
+    lines = path.read_text(encoding="utf-8").splitlines()
+    assert lines[0] == ",".join(PREDICTION_COLUMNS)
+    assert len(lines) == 4 and sum(line.startswith("timestamp,") for line in lines) == 1
+
+
+def test_new_logger_appends_to_an_existing_log(tmp_path: Path) -> None:
+    path = tmp_path / "predictions.csv"
+    PredictionLogger(path).log(RECORDS[:1], [1.0], "1")
+    PredictionLogger(path).log(RECORDS[:1], [2.0], "1")
+    assert [row["prediction"] for row in read_rows(path)] == ["1.0", "2.0"]
+
+
+def test_header_is_written_to_an_empty_file(tmp_path: Path) -> None:
+    path = tmp_path / "predictions.csv"
+    path.touch()
+    PredictionLogger(path).log(RECORDS[:1], [1.0], "1")
+    assert list(read_rows(path)[0]) == list(PREDICTION_COLUMNS)
+
+
+def test_missing_folders_are_created(tmp_path: Path) -> None:
+    path = tmp_path / "a" / "b" / "predictions.csv"
+    PredictionLogger(path).log(RECORDS[:1], [1.0], "1")
+    TrainingLogger(tmp_path / "c" / "training.csv").log(TrainResult("r", "ridge", "1", {}, None, True))
+    assert len(read_rows(path)) == 1 and len(read_rows(tmp_path / "c" / "training.csv")) == 1
