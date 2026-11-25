@@ -1,5 +1,5 @@
 """Request and response models of the REST API."""
-from typing import Final
+from typing import Final, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -7,6 +7,14 @@ from meteorite.schemas import MeteoriteFeatures
 
 # bounds memory and latency of a single request
 MAX_RECORDS: Final[int] = 1000
+
+
+class HealthResponse(BaseModel):
+    """Liveness of the API and availability of the champion model."""
+
+    status: Literal["ok"] = "ok"
+    champion: bool = Field(description="True if a model with the champion alias is loaded and /predict works.")
+    model_version: str | None = Field(default=None, examples=["2"])
 
 
 class PredictRequest(BaseModel):

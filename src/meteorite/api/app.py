@@ -9,7 +9,7 @@ from typing import Annotated
 from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, status
 
 import meteorite
-from meteorite.api.schemas import PredictRequest, PredictResponse, TrainRequest, TrainResponse
+from meteorite.api.schemas import HealthResponse, PredictRequest, PredictResponse, TrainRequest, TrainResponse
 from meteorite.api_tracking import ApiTracker
 from meteorite.config import Settings
 from meteorite.inference import predict
@@ -72,9 +72,13 @@ TrackerDep = Annotated[ApiTracker, Depends(get_api_tracker)]
 
 
 @app.get("/health")
-def health() -> dict[str, str]:
-    """Liveness probe for docker compose and monitoring."""
-    return {"status": "ok"}
+def health(store: StoreDep) -> HealthResponse:
+    """Liveness probe; the API is up even without a champion, ``champion`` tells whether /predict can answer."""
+    try:
+        _, version = store.get()
+    except NoChampionError:
+        return HealthResponse(champion=False)
+    return HealthResponse(champion=True, model_version=version)
 
 
 @app.post("/predict", responses={503: {"description": "No champion model yet, call /train first"}})
