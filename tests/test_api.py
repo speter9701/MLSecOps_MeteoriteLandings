@@ -6,7 +6,8 @@ from fastapi.testclient import TestClient
 from mlflow.pyfunc import PyFuncModel
 
 import meteorite
-from meteorite.api.app import app, get_model_store
+from meteorite.api.app import app
+from meteorite.api.dependencies import get_model_store
 from meteorite.model_store import ModelStore
 
 client = TestClient(app)

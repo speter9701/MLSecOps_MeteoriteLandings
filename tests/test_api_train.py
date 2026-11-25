@@ -7,8 +7,9 @@ import pytest
 from fastapi.testclient import TestClient
 from mlflow.tracking import MlflowClient
 
-from meteorite.api.app import (
-    app, get_api_tracker, get_model_store, get_settings, get_trainer, get_training_logger,
+from meteorite.api.app import app
+from meteorite.api.dependencies import (
+    get_api_tracker, get_model_store, get_settings, get_trainer, get_training_logger,
 )
 from meteorite.api_tracking import ApiTracker
 from meteorite.config import Settings
