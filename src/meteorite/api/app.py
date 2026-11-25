@@ -1,4 +1,6 @@
 """FastAPI application exposing the meteorite mass model."""
+import logging
+import time
 from collections.abc import Callable
 from dataclasses import asdict, replace
 from functools import lru_cache
@@ -11,11 +13,15 @@ from meteorite.api.schemas import PredictRequest, PredictResponse, TrainRequest,
 from meteorite.api_tracking import ApiTracker
 from meteorite.config import Settings
 from meteorite.inference import predict
+from meteorite.logging_config import configure_logging
 from meteorite.model_store import ModelStore, NoChampionError
 from meteorite.prediction_log import PredictionLogger, TrainingLogger
 from meteorite.training import TrainResult, train_and_register
 
 Trainer = Callable[[Settings], TrainResult]
+
+configure_logging()
+logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title="Meteorite mass API",
@@ -83,9 +89,11 @@ def predict_mass(
     try:
         model, version = store.get()
     except NoChampionError as exc:
+        logger.warning("predict rejected: no champion model")
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
     predictions = predict(model, request.records)
     request_id = prediction_log.log(request.records, predictions, version)
+    logger.info("predict request_id=%s records=%d model_version=%s", request_id, len(predictions), version)
     response = PredictResponse(request_id=request_id, model_version=version, predictions=predictions)
     # MLflow round trips run after the response is sent, they do not add to the latency
     background_tasks.add_task(
@@ -106,7 +114,13 @@ def train(
     """Retrain and register a new model version; it becomes champion only if it is not worse (takes ~45 s)."""
     if request is not None and request.min_improvement is not None:
         settings = replace(settings, min_improvement=request.min_improvement)
+    logger.info("train started min_improvement=%s", settings.min_improvement)
+    started = time.perf_counter()
     result = trainer(settings)
+    logger.info(
+        "train finished run_id=%s best_model=%s model_version=%s promoted=%s seconds=%.1f",
+        result.run_id, result.best_model, result.model_version, result.promoted, time.perf_counter() - started,
+    )
     tracker.tag_training_run(result.run_id)
     training_log.log(result)
     if result.promoted:
