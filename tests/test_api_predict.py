@@ -7,7 +7,8 @@ from fastapi.testclient import TestClient
 from mlflow.exceptions import MlflowException
 from mlflow.tracking import MlflowClient
 
-from meteorite.api.app import app, get_api_tracker, get_model_store, get_prediction_logger
+from meteorite.api.app import app
+from meteorite.api.dependencies import get_api_tracker, get_model_store, get_prediction_logger
 from meteorite.api.schemas import MAX_RECORDS
 from meteorite.api_tracking import PREDICTION_EXPERIMENT, ApiTracker
 from meteorite.config import Settings

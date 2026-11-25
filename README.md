@@ -153,7 +153,14 @@ promoted, version 3 was trained with `MIN_IMPROVEMENT=0.5` and therefore **not**
 
 ## REST API
 
-FastAPI application in `src/meteorite/api/` (thin layer: business logic stays in `src/meteorite/`).
+FastAPI application in `src/meteorite/api/` (thin layer: business logic stays in `src/meteorite/`):
+
+| Module | Role |
+|--------|------|
+| `api/app.py` | creates the app, configures logging, JSON error handler, includes the router |
+| `api/routes.py` | the endpoints (`APIRouter`) |
+| `api/dependencies.py` | `Depends` providers: model store, settings, trainer, CSV loggers, MLflow tracker (replaced in tests) |
+| `api/schemas.py` | pydantic request / response models |
 
 ### Run locally
 
@@ -164,7 +171,7 @@ python -m uvicorn meteorite.api.app:app --reload     # http://127.0.0.1:8000/doc
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/health` | liveness probe, returns `{"status": "ok"}` |
+| `GET` | `/health` | liveness probe: `{"status": "ok", "champion": true, "model_version": "2"}`, `champion: false` until the first training |
 | `POST` | `/predict` | predicted mass (grams) for 1-1000 records with the `@champion` model |
 | `POST` | `/train` | retrain + register a new version, promote it only if it is not worse than the champion |
 
@@ -270,3 +277,21 @@ Both endpoints leave a trace in MLflow (`src/meteorite/api_tracking.py`, `ApiTra
   experiment per process, and a concurrent `/train` would switch it.
 - Trainings started outside the API (`python -m meteorite.training`, `mlflow run`) have no `source=api` tag,
   so the MLflow UI filter `tags.source = 'api'` lists the API-triggered ones.
+
+### Errors and logging
+
+- Every error body has the same shape, `{"detail": ...}`: 422 (validation, list of field errors from FastAPI),
+  503 (no champion) and 500 (any unexpected exception: `{"detail": "Internal server error"}`, the stack trace goes
+  to the log only, never to the client).
+- `/health` answers 200 even without a champion, so docker compose sees the container as up; `champion` tells
+  whether `/predict` can serve yet.
+- If MLflow is unreachable while a predict run is written, the response is not affected: the error is logged and
+  the request is still in `logs/predictions.csv`.
+- `src/meteorite/logging_config.py` sends the `meteorite.*` loggers (no `print`) to stderr in key=value format,
+  so `docker compose logs api` is easy to grep. Level: `LOG_LEVEL` env var (`DEBUG`, `INFO` default, `WARNING`,
+  `ERROR`); an unknown value stops the API at start-up.
+
+```text
+2026-11-25 09:12:03,417 level=INFO logger=meteorite.api.routes predict request_id=5b66ef31-... records=2 model_version=2
+2026-11-25 09:13:10,022 level=INFO logger=meteorite.api.routes train finished run_id=9c1d... best_model=random_forest model_version=3 promoted=True seconds=44.8
+```
