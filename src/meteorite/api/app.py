@@ -6,7 +6,8 @@ from dataclasses import asdict, replace
 from functools import lru_cache
 from typing import Annotated
 
-from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, status
+from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Request, status
+from fastapi.responses import JSONResponse
 
 import meteorite
 from meteorite.api.schemas import HealthResponse, PredictRequest, PredictResponse, TrainRequest, TrainResponse
@@ -28,6 +29,13 @@ app = FastAPI(
     version=meteorite.__version__,
     description="Predicts the mass (grams) of a meteorite and retrains the model through MLflow.",
 )
+
+
+@app.exception_handler(Exception)
+async def unexpected_error(request: Request, exc: Exception) -> JSONResponse:
+    """Same ``{"detail": ...}`` body as for 4xx errors, without leaking internals to the client."""
+    logger.exception("unhandled error on %s %s", request.method, request.url.path, exc_info=exc)
+    return JSONResponse(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, content={"detail": "Internal server error"})
 
 
 @lru_cache(maxsize=1)
