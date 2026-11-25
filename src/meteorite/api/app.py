@@ -4,7 +4,7 @@ import time
 from collections.abc import Callable
 from dataclasses import asdict, replace
 from functools import lru_cache
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Request, status
 from fastapi.responses import JSONResponse
@@ -79,6 +79,16 @@ TrainingLogDep = Annotated[TrainingLogger, Depends(get_training_logger)]
 TrackerDep = Annotated[ApiTracker, Depends(get_api_tracker)]
 
 
+def track_prediction(
+    tracker: ApiTracker, request_id: str, request: dict[str, Any], response: dict[str, Any], model_version: str
+) -> None:
+    """Write the MLflow run of a predict call; a tracking outage is logged, the CSV log still has the request."""
+    try:
+        tracker.log_prediction(request_id, request, response, model_version)
+    except Exception:  # any MLflow / network error: the response is already sent
+        logger.exception("could not log predict request_id=%s to MLflow", request_id)
+
+
 @app.get("/health")
 def health(store: StoreDep) -> HealthResponse:
     """Liveness probe; the API is up even without a champion, ``champion`` tells whether /predict can answer."""
@@ -109,7 +119,12 @@ def predict_mass(
     response = PredictResponse(request_id=request_id, model_version=version, predictions=predictions)
     # MLflow round trips run after the response is sent, they do not add to the latency
     background_tasks.add_task(
-        tracker.log_prediction, request_id, request.model_dump(mode="json"), response.model_dump(mode="json"), version
+        track_prediction,
+        tracker,
+        request_id,
+        request.model_dump(mode="json"),
+        response.model_dump(mode="json"),
+        version,
     )
     return response
 
