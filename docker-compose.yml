@@ -1,0 +1,74 @@
+x-app: &app
+  image: meteorite-app:local
+  build: .
+
+x-runtime: &runtime
+  MLFLOW_TRACKING_URI: http://mlflow:5000
+  DATA_PATH: /app/data/processed/meteorites_sample.csv
+  PREDICTION_LOG_PATH: /app/logs/predictions.csv
+  TRAINING_LOG_PATH: /app/logs/training.csv
+  OPENBLAS_NUM_THREADS: "1"
+  OMP_NUM_THREADS: "1"
+
+x-data: &data
+  type: bind
+  source: ./data
+  target: /app/data
+  read_only: true
+  bind:
+    create_host_path: false
+
+services:
+  mlflow:
+    <<: *app
+    command:
+      - mlflow
+      - server
+      - --host=0.0.0.0
+      - --port=5000
+      - --workers=2
+      - --backend-store-uri=sqlite:////mlflow/mlflow.db
+      - --artifacts-destination=/mlflow/artifacts
+      - --allowed-hosts=mlflow:5000,127.0.0.1:5000,localhost:${METEORITE_MLFLOW_PORT:-5000},127.0.0.1:${METEORITE_MLFLOW_PORT:-5000}
+    ports:
+      - "127.0.0.1:${METEORITE_MLFLOW_PORT:-5000}:5000"
+    volumes:
+      - mlflow:/mlflow
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/health', timeout=3).close()"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+
+  trainer:
+    <<: *app
+    command: ["python", "-m", "meteorite.training"]
+    environment: *runtime
+    volumes:
+      - *data
+    depends_on:
+      mlflow:
+        condition: service_healthy
+
+  api:
+    <<: *app
+    environment: *runtime
+    ports:
+      - "127.0.0.1:${METEORITE_API_PORT:-8000}:8000"
+    volumes:
+      - *data
+      - prediction-logs:/app/logs
+    healthcheck:
+      test: ["CMD", "python", "-c", "import json, urllib.request; assert json.load(urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=8))['champion']"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 10s
+    depends_on:
+      trainer:
+        condition: service_completed_successfully
+
+volumes:
+  mlflow:
+  prediction-logs:
