@@ -69,6 +69,16 @@ services:
       trainer:
         condition: service_completed_successfully
 
+  streamlit:
+    <<: *app
+    command: ["streamlit", "run", "dashboards/streamlit_app.py", "--server.address=0.0.0.0", "--server.headless=true", "--browser.gatherUsageStats=false"]
+    environment: *runtime
+    ports:
+      - "127.0.0.1:${METEORITE_STREAMLIT_PORT:-8501}:8501"
+    volumes:
+      - *data
+      - prediction-logs:/app/logs:ro
+
 volumes:
   mlflow:
   prediction-logs:
