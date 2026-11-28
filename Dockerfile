@@ -13,6 +13,8 @@ RUN --mount=type=bind,source=.,target=/build-context \
     && cp -r /build-context/pyproject.toml /build-context/README.md /build-context/src /tmp/meteorite/ \
     && python -m pip install --no-cache-dir --no-deps /tmp/meteorite \
     && rm -r /tmp/meteorite \
+    && cp -r /build-context/dashboards /app/ \
+    && chmod -R a+rX /app/dashboards \
     && useradd --create-home --uid 10001 meteorite \
     && install -d -o meteorite -g meteorite /app/logs /mlflow
 
