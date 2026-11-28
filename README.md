@@ -283,8 +283,7 @@ Both endpoints leave a trace in MLflow (`src/meteorite/api_tracking.py`, `ApiTra
 - Every error body has the same shape, `{"detail": ...}`: 422 (validation, list of field errors from FastAPI),
   503 (no champion) and 500 (any unexpected exception: `{"detail": "Internal server error"}`, the stack trace goes
   to the log only, never to the client).
-- `/health` answers 200 even without a champion, so docker compose sees the container as up; `champion` tells
-  whether `/predict` can serve yet.
+- `/health` answers 200 even without a champion, and the `champion` field tells whether `/predict` can serve yet.
 - If MLflow is unreachable while a predict run is written, the response is not affected: the error is logged and
   the request is still in `logs/predictions.csv`.
 - `src/meteorite/logging_config.py` sends the `meteorite.*` loggers (no `print`) to stderr in key=value format,
@@ -295,3 +294,84 @@ Both endpoints leave a trace in MLflow (`src/meteorite/api_tracking.py`, `ApiTra
 2026-11-25 09:12:03,417 level=INFO logger=meteorite.api.routes predict request_id=5b66ef31-... records=2 model_version=2
 2026-11-25 09:13:10,022 level=INFO logger=meteorite.api.routes train finished run_id=9c1d... best_model=random_forest model_version=3 promoted=True seconds=44.8
 ```
+
+## Running the system
+
+Install Docker with the Compose v2 plugin and configure the DagsHub remote as described in the DVC setup.
+From the repository root, fetch the versioned data and start the stack:
+
+```sh
+dvc pull
+docker compose up
+```
+
+| Service | Local address | Role |
+| --- | --- | --- |
+| MLflow | http://localhost:5000 | Tracks experiments and serves registered model artifacts. |
+| Trainer | `docker compose logs trainer` | Runs initial training after MLflow is healthy, then exits. |
+| REST API | http://localhost:8000/docs | Starts after the trainer succeeds. `/health` reports champion readiness. |
+| Streamlit | http://localhost:8501 | Shows prediction activity and the Evidently drift report. |
+| Airflow | http://localhost:8080 | Schedules daily retraining once the API is healthy. |
+
+`docker compose ps --all` shows the long-running services and the trainer's expected `Exited (0)` state.
+Compose mounts `data/` read-only and persists the MLflow store, API logs and Airflow state in named volumes.
+Streamlit mounts the prediction-log volume read-only. To export the prediction log after making an API request,
+use `docker compose cp api:/app/logs/predictions.csv ./predictions.csv`.
+
+If a port is busy, set `METEORITE_MLFLOW_PORT`, `METEORITE_API_PORT`, `METEORITE_STREAMLIT_PORT` or
+`METEORITE_AIRFLOW_PORT` before starting. Compose keeps the standard service ports internally.
+After changing application code, run `docker compose up --build` to rebuild.
+
+## Continuous integration
+
+[![CI](https://github.com/speter9701/MLSecOps_MeteoriteLandings/actions/workflows/ci.yml/badge.svg)](https://github.com/speter9701/MLSecOps_MeteoriteLandings/actions/workflows/ci.yml)
+
+Pull requests and pushes to `main` run the Python 3.13 quality job and the Docker image build.
+The quality job runs pre-commit and pytest, enforces 95% coverage across `src/` and `tests/`,
+and attaches `coverage.xml` to the workflow run. Tests use synthetic fixtures and need no DagsHub credentials.
+
+## Monitoring
+
+In Swagger, send a `POST /predict` request with a few records:
+
+```json
+{
+  "records": [
+    {"recclass": "L6", "fall": "Found", "year": 1998, "reclat": -76.7, "reclong": 159.4},
+    {"recclass": "H5", "fall": "Fell", "year": 2001, "reclat": 46.0, "reclong": 19.0}
+  ]
+}
+```
+
+Open Streamlit and select **Refresh data**. The dashboard counts prediction rows by UTC day.
+Evidently compares the six model features in those rows with the cleaned DVC sample. The report lists
+features where it detected drift and skips features with no comparable observations, such as a coordinate
+omitted from every request. Drift measures differences in feature distributions.
+
+## Scheduled retraining
+
+The `retrain_meteorite_model` DAG runs daily in UTC with catch-up disabled and one active run at a time.
+Its single task calls `POST /train` and logs the run ID, model version and promotion result. The training
+pipeline registers the challenger and keeps serving the existing champion when the challenger fails the
+promotion rule.
+
+Retrieve the generated local administrator credentials with `docker compose logs airflow` and sign in to
+Airflow. Open the DAG to inspect its task and run history, or trigger it manually for a demo. The task fails on
+unsuccessful HTTP responses. Automatic task retries are disabled because a timed-out request can still be
+training on the API server.
+
+## Infrastructure screenshots
+
+The service screenshots are from a local integration run with the versioned training sample.
+
+| Evidence | Screenshot |
+| --- | --- |
+| Prediction activity and data drift | [Streamlit and Evidently](docs/screenshots/streamlit_evidently_report.png) |
+| Successful retraining task | [Airflow DAG](docs/screenshots/airflow_dag.png) |
+| Model registry and champion alias | [MLflow model registry](docs/screenshots/mlflow_infra_registry.png) |
+| Local pre-commit checks | [Pre-commit output](docs/screenshots/precommit_hooks.png) |
+
+## AI assistance
+
+OpenAI Codex assisted with the infrastructure and monitoring implementation, tests, troubleshooting, and
+documentation for this section.
