@@ -56,14 +56,23 @@ jobs:
         run: |
           curl --fail --silent --show-error --retry 30 --retry-all-errors --retry-delay 5 --max-time 5 \
             http://localhost:8080/ --output /dev/null
-          for attempt in $(seq 1 24); do
-            if docker compose exec -T airflow airflow dags list -o json > evidence/airflow-dags.json &&
-              jq -e 'any(.[]; .dag_id == "retrain_meteorite_model")' evidence/airflow-dags.json > /dev/null; then
-              break
-            fi
-            sleep 5
-          done
-          jq -e 'any(.[]; .dag_id == "retrain_meteorite_model")' evidence/airflow-dags.json
+          docker compose exec -T airflow python -c '
+          import sqlite3
+          import time
+
+          with sqlite3.connect("file:/opt/airflow/airflow.db?mode=ro", uri=True) as database:
+              for attempt in range(24):
+                  row = database.execute(
+                      "SELECT dag_id FROM serialized_dag WHERE dag_id = ?",
+                      ("retrain_meteorite_model",),
+                  ).fetchone()
+                  if row:
+                      print(f"Airflow loaded {row[0]}")
+                      break
+                  time.sleep(5)
+              else:
+                  raise SystemExit("Airflow did not load the retraining DAG.")
+          ' | tee evidence/airflow-dag.txt
           docker compose exec -T airflow airflow dags trigger retrain_meteorite_model --run-id compose-smoke
           for attempt in $(seq 1 48); do
             state=$(docker compose exec -T airflow python -c '
