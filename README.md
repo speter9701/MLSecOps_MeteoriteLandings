@@ -362,7 +362,9 @@ training on the API server.
 
 ## Infrastructure screenshots
 
-The service screenshots are from a local integration run with the versioned training sample.
+The dashboard and registry screenshots are from a local integration run with the versioned training sample.
+The Compose status capture reproduces the recorded `docker compose ps --all` output. The CI capture summarizes
+the two successful jobs returned by the GitHub Actions API.
 
 | Evidence | Screenshot |
 | --- | --- |
@@ -370,6 +372,12 @@ The service screenshots are from a local integration run with the versioned trai
 | Successful retraining task | [Airflow DAG](docs/screenshots/airflow_dag.png) |
 | Model registry and champion alias | [MLflow model registry](docs/screenshots/mlflow_infra_registry.png) |
 | Local pre-commit checks | [Pre-commit output](docs/screenshots/precommit_hooks.png) |
+| Complete Docker Compose stack | [Container status](docs/screenshots/docker_compose_ps.png) |
+| Successful CI on `main` | [CI job results](docs/screenshots/github_actions_green.png) |
+
+- [End-to-end Compose run](https://github.com/speter9701/MLSecOps_MeteoriteLandings/actions/runs/46146664060)
+  and [recorded results](https://github.com/speter9701/MLSecOps_MeteoriteLandings/actions/runs/46146664060/artifacts/15264371347).
+- [Passing CI run on `main`](https://github.com/speter9701/MLSecOps_MeteoriteLandings/actions/runs/46145173514).
 
 ## AI assistance
 
