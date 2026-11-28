@@ -35,3 +35,10 @@ jobs:
           name: coverage
           path: coverage.xml
           if-no-files-found: warn
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Build the application image
+        run: docker build .
