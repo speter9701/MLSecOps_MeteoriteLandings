@@ -283,8 +283,7 @@ Both endpoints leave a trace in MLflow (`src/meteorite/api_tracking.py`, `ApiTra
 - Every error body has the same shape, `{"detail": ...}`: 422 (validation, list of field errors from FastAPI),
   503 (no champion) and 500 (any unexpected exception: `{"detail": "Internal server error"}`, the stack trace goes
   to the log only, never to the client).
-- `/health` answers 200 even without a champion, so docker compose sees the container as up; `champion` tells
-  whether `/predict` can serve yet.
+- `/health` answers 200 even without a champion, and the `champion` field tells whether `/predict` can serve yet.
 - If MLflow is unreachable while a predict run is written, the response is not affected: the error is logged and
   the request is still in `logs/predictions.csv`.
 - `src/meteorite/logging_config.py` sends the `meteorite.*` loggers (no `print`) to stderr in key=value format,
@@ -360,6 +359,17 @@ Retrieve the generated local administrator credentials with `docker compose logs
 Airflow. Open the DAG to inspect its task and run history, or trigger it manually for a demo. The task fails on
 unsuccessful HTTP responses. Automatic task retries are disabled because a timed-out request can still be
 training on the API server.
+
+## Infrastructure screenshots
+
+The service screenshots are from a local integration run with the versioned training sample.
+
+| Evidence | Screenshot |
+| --- | --- |
+| Prediction activity and data drift | [Streamlit and Evidently](docs/screenshots/streamlit_evidently_report.png) |
+| Successful retraining task | [Airflow DAG](docs/screenshots/airflow_dag.png) |
+| Model registry and champion alias | [MLflow model registry](docs/screenshots/mlflow_infra_registry.png) |
+| Local pre-commit checks | [Pre-commit output](docs/screenshots/precommit_hooks.png) |
 
 ## AI assistance
 
