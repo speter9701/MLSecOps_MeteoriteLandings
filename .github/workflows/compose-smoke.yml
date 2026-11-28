@@ -54,11 +54,11 @@ jobs:
 
       - name: Trigger the Airflow DAG and wait for success
         run: |
-          curl --fail --silent --show-error --retry 30 --retry-connrefused --retry-delay 5 \
+          curl --fail --silent --show-error --retry 30 --retry-all-errors --retry-delay 5 --max-time 5 \
             http://localhost:8080/ --output /dev/null
           for attempt in $(seq 1 24); do
-            docker compose exec -T airflow airflow dags list -o json > evidence/airflow-dags.json
-            if jq -e 'any(.[]; .dag_id == "retrain_meteorite_model")' evidence/airflow-dags.json > /dev/null; then
+            if docker compose exec -T airflow airflow dags list -o json > evidence/airflow-dags.json &&
+              jq -e 'any(.[]; .dag_id == "retrain_meteorite_model")' evidence/airflow-dags.json > /dev/null; then
               break
             fi
             sleep 5
