@@ -18,7 +18,7 @@ def load_champion(tracking_uri: str | None = None) -> PyFuncModel:
 
 def to_frame(records: Sequence[MeteoriteFeatures]) -> pd.DataFrame:
     """Convert validated records to the column layout of the model signature."""
-    frame = pd.DataFrame([record.model_dump() for record in records], columns=list(FEATURE_COLUMNS))
+    frame = pd.DataFrame([record.model_dump() for record in records], columns=pd.Index(FEATURE_COLUMNS))
     frame[list(NUMERIC_FEATURES)] = frame[list(NUMERIC_FEATURES)].astype(float)
     return frame
 
